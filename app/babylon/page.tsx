@@ -37,15 +37,15 @@ export default function BabylonMMO() {
       const camera = new BABYLON.ArcRotateCamera(
         "camera",
         0,
-        Math.PI / 3,
-        12,
+        Math.PI / 3.2,
+        24,
         BABYLON.Vector3.Zero(),
         scene
       );
       camera.attachControl(canvas, true);
       camera.setTarget(cameraTarget.position);
-      camera.lowerRadiusLimit = 3;
-      camera.upperRadiusLimit = 20;
+      camera.lowerRadiusLimit = 6;
+      camera.upperRadiusLimit = 60;
       camera.lowerBetaLimit = 0.1;
       camera.upperBetaLimit = Math.PI / 2;
 
@@ -1177,7 +1177,25 @@ export default function BabylonMMO() {
       // Input handling
       const input = { f: 0, r: 0, space: false };
       const keysDown = new Set<string>();
-      const onKeyDown = (e: KeyboardEvent) => keysDown.add(e.key.toLowerCase());
+      const onKeyDown = (e: KeyboardEvent) => {
+        keysDown.add(e.key.toLowerCase());
+        // Ctrl/Cmd +/- zoom shortcuts
+        if (e.ctrlKey || e.metaKey) {
+          if (e.key === "+" || e.key === "=") {
+            e.preventDefault();
+            camera.radius = Math.max(
+              camera.lowerRadiusLimit ?? 2,
+              camera.radius * 0.9
+            );
+          } else if (e.key === "-" || e.key === "_") {
+            e.preventDefault();
+            camera.radius = Math.min(
+              camera.upperRadiusLimit ?? 200,
+              camera.radius * 1.1
+            );
+          }
+        }
+      };
       const onKeyUp = (e: KeyboardEvent) =>
         keysDown.delete(e.key.toLowerCase());
       window.addEventListener("keydown", onKeyDown);

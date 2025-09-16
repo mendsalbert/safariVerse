@@ -244,6 +244,28 @@ const factsData: Record<
     blurb:
       "Sudan is home to more pyramids than Egypt, along with diverse wildlife and ancient Nubian culture.",
   },
+  ghana: {
+    name: "Ghana",
+    capital: "Accra",
+    foods: ["Jollof Rice", "Waakye", "Kelewele"],
+    languages: ["English", "Akan", "Ewe", "Ga"],
+    spots: [
+      {
+        name: "Cape Coast Castle",
+        img: "https://images.unsplash.com/photo-1594624541633-9e90d670da31?w=400&h=250&fit=crop&auto=format",
+      },
+      {
+        name: "Kakum National Park",
+        img: "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=400&h=250&fit=crop&auto=format",
+      },
+      {
+        name: "Kwame Nkrumah Mausoleum",
+        img: "https://images.unsplash.com/photo-1558980394-0b3e26c72045?w=400&h=250&fit=crop&auto=format",
+      },
+    ],
+    blurb:
+      "Ghana, the Land of Gold, is known for its warm hospitality, rich history, and vibrant music and arts scene.",
+  },
 };
 
 export default function CountryPage() {

@@ -32,6 +32,7 @@ interface CountryMarker {
 
 const africanTop10: CountryMarker[] = [
   { id: "nigeria", name: "Nigeria", lat: 9.082, lng: 8.675, color: "#22c55e" },
+  { id: "ghana", name: "Ghana", lat: 7.946, lng: -1.023, color: "#eab308" },
   {
     id: "ethiopia",
     name: "Ethiopia",
@@ -94,20 +95,22 @@ function CountryPin({
   radius: number;
 }) {
   const pos = useMemo(
-    () => latLngToVector3(country.lat, country.lng, radius + 0.02),
+    () => latLngToVector3(country.lat, country.lng, radius + 0.001),
     [country, radius]
   );
+  const tangentRotation = useMemo(() => {
+    const normal = pos.clone().normalize();
+    const from = new THREE.Vector3(0, 0, 1); // Html plane faces +Z by default
+    const q = new THREE.Quaternion().setFromUnitVectors(from, normal);
+    const e = new THREE.Euler().setFromQuaternion(q);
+    return [e.x, e.y, e.z] as [number, number, number];
+  }, [pos]);
   const [hovered, setHovered] = useState(false);
   const router = useRouter();
 
   return (
     <group position={pos.toArray()}>
-      <Html
-        distanceFactor={10}
-        center
-        transform
-        rotation={[-Math.PI / 25, 10, 0]}
-      >
+      <Html distanceFactor={10} center transform rotation={tangentRotation}>
         <div
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
@@ -122,10 +125,8 @@ function CountryPin({
           className="flex items-center justify-center cursor-pointer"
           style={{ pointerEvents: "auto" }}
         >
-          <img
-            src="/pin-globe.svg"
-            alt={country.name}
-            className="w-5 h-5 drop-shadow-lg"
+          <div
+            className="w-3 h-3 flex items-center justify-center rounded-full bg-black/70 border border-white/30"
             style={{
               filter: hovered
                 ? `drop-shadow(0 0 8px ${country.color})`
@@ -133,11 +134,21 @@ function CountryPin({
               transform: hovered ? "scale(1.2)" : "scale(1)",
               transition: "all 0.2s ease",
             }}
-          />
+          >
+            <MapPin
+              className="w-3 h-3"
+              style={{ color: hovered ? country.color : "#ffffff" }}
+            />
+          </div>
         </div>
       </Html>
       {hovered && (
-        <Html distanceFactor={10} position={[0, 0.12, 0]} center>
+        <Html
+          distanceFactor={10}
+          position={[0, 0.02, 0]}
+          center
+          rotation={tangentRotation}
+        >
           <div className="bg-black/75 text-white text-xs px-2 py-1 rounded-md border border-amber-500/50 whitespace-nowrap">
             {country.name}
           </div>
@@ -250,33 +261,7 @@ export default function GlobeAfrica() {
           </div>
         </div>
       </div>
-      {/* Bottom-right legend */}
-      <div className="absolute bottom-6 right-6 z-10 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-amber-500/30 text-red-100">
-        <div className="flex items-center gap-2 mb-2">
-          <MapIcon className="w-5 h-5 text-red-300" />
-          <span className="font-semibold">Legend</span>
-        </div>
-        <div className="text-sm space-y-2">
-          <div className="flex items-center gap-2">
-            <img src="/pin-globe.svg" className="w-3 h-3" />
-            <span>Country pin</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span
-              className="inline-block w-3 h-3 rounded-full"
-              style={{ background: "#1B4F72" }}
-            ></span>
-            <span>Ocean</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span
-              className="inline-block w-3 h-3 rounded-full"
-              style={{ background: "#8B4513" }}
-            ></span>
-            <span>Continent</span>
-          </div>
-        </div>
-      </div>
+      {/* Bottom-right area intentionally left free for global UI controls */}
       <Canvas shadows onPointerMissed={() => {}}>
         <Suspense fallback={null}>
           <PerspectiveCamera makeDefault position={[0, 0, 7]} />

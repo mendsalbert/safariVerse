@@ -34,6 +34,8 @@ import {
   Zap,
   Apple,
   Shield,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 // Converted R3F animal models (GLB -> components)
 // Animal models removed from scene
@@ -47,6 +49,39 @@ import { Model as BarrelCactus } from "../../components/env/BarrelCactus";
 import { Model as PricklyPearCactus } from "../../components/env/PricklyPearCactus";
 // Bridge removed from scene
 import { Model as Humvee } from "../../components/env/Humvee";
+
+// Preload frequently used GLB assets to prevent blank canvas on refresh due to loading stalls
+// Add error handling and force preload
+const preloadAssets = () => {
+  const assets = [
+    "/models/animalss/Elephant.glb",
+    "/models/animalss/Giraffe.glb",
+    "/models/animalss/Lion.glb",
+    "/models/animalss/Hippopotamus.glb",
+    "/models/animalss/Gazelle.glb",
+    "/models/animalss/bird.glb",
+    "/models/animalss/Hummingbird.glb",
+    "/models/animalss/Waterfall.glb",
+    "/models/animalss/Zebra.glb",
+    "/models/trees/Big%20Tree.glb",
+    "/models/trees/Trees.glb",
+    "/models/trees/Twisted%20Tree.glb",
+    "/models/rocks/Rock.glb",
+    "/models/rocks/Rock%20Large.glb",
+    "/models/rocks/Rock%20Medium.glb",
+    "/models/rocks/Rocks.glb",
+  ];
+
+  assets.forEach((asset) => {
+    try {
+      useGLTF.preload(asset);
+    } catch (error) {
+      console.warn(`Failed to preload ${asset}:`, error);
+    }
+  });
+};
+
+preloadAssets();
 
 // Game state interface
 interface GameState {
@@ -355,13 +390,21 @@ function BigTreeInstance({
   scale: [number, number, number];
 }) {
   const gltf: any = useGLTF("/models/trees/Big%20Tree.glb");
-  const cloned = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
+  const cloned = useMemo(() => {
+    if (!gltf?.scene) return null;
+    return gltf.scene.clone(true);
+  }, [gltf?.scene]);
   useEffect(() => {
     if (!cloned) return;
     const box = new THREE.Box3().setFromObject(cloned);
     const minY = box.min.y;
-    cloned.position.y -= minY; // lift so base sits at y=0 relative to instance
+    cloned.position.y = -minY; // lift so base sits at y=0 relative to instance
   }, [cloned]);
+
+  if (!cloned) {
+    return null;
+  }
+
   return (
     <group
       position={[position[0], position[1] - 0.2, position[2]]}
@@ -385,13 +428,21 @@ function TreesInstance({
   scale: [number, number, number];
 }) {
   const gltf: any = useGLTF("/models/trees/Trees.glb");
-  const cloned = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
+  const cloned = useMemo(() => {
+    if (!gltf?.scene) return null;
+    return gltf.scene.clone(true);
+  }, [gltf?.scene]);
   useEffect(() => {
     if (!cloned) return;
     const box = new THREE.Box3().setFromObject(cloned);
     const minY = box.min.y;
-    cloned.position.y -= minY;
+    cloned.position.y = -minY;
   }, [cloned]);
+
+  if (!cloned) {
+    return null;
+  }
+
   return (
     <group
       position={position}
@@ -415,13 +466,21 @@ function TwistedTreeInstance({
   scale: [number, number, number];
 }) {
   const gltf: any = useGLTF("/models/trees/Twisted%20Tree.glb");
-  const cloned = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
+  const cloned = useMemo(() => {
+    if (!gltf?.scene) return null;
+    return gltf.scene.clone(true);
+  }, [gltf?.scene]);
   useEffect(() => {
     if (!cloned) return;
     const box = new THREE.Box3().setFromObject(cloned);
     const minY = box.min.y;
-    cloned.position.y -= minY;
+    cloned.position.y = -minY;
   }, [cloned]);
+
+  if (!cloned) {
+    return null;
+  }
+
   return (
     <group
       position={position}
@@ -447,13 +506,21 @@ function RockInstance({
   scale: [number, number, number];
 }) {
   const gltf: any = useGLTF(url);
-  const cloned = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
+  const cloned = useMemo(() => {
+    if (!gltf?.scene) return null;
+    return gltf.scene.clone(true);
+  }, [gltf?.scene]);
   useEffect(() => {
     if (!cloned) return;
     const box = new THREE.Box3().setFromObject(cloned);
     const minY = box.min.y;
-    cloned.position.y -= minY;
+    cloned.position.y = -minY;
   }, [cloned]);
+
+  if (!cloned) {
+    return null;
+  }
+
   return (
     <group
       position={position}
@@ -523,7 +590,10 @@ function ZebraInstance({
   scale: [number, number, number];
 }) {
   const gltf: any = useGLTF("/models/animalss/Zebra.glb");
-  const cloned = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
+  const cloned = useMemo(() => {
+    if (!gltf?.scene) return null;
+    return gltf.scene.clone(true);
+  }, [gltf?.scene]);
   const groupRef = useRef<THREE.Group>(null);
   const centerRef = useRef<THREE.Vector3>(
     new THREE.Vector3(position[0], position[1], position[2])
@@ -538,7 +608,8 @@ function ZebraInstance({
     if (!cloned) return;
     const box = new THREE.Box3().setFromObject(cloned);
     const minY = box.min.y;
-    cloned.position.y -= minY;
+    // Position the zebra so its feet are at y=0
+    cloned.position.y = -minY;
   }, [cloned]);
 
   useFrame((_, delta) => {
@@ -553,7 +624,7 @@ function ZebraInstance({
     const r = radiusRef.current;
     const nx = cx + Math.cos(theta) * r;
     const nz = cz + Math.sin(theta) * r;
-    const ny = getTerrainHeight(nx, nz);
+    const ny = getTerrainHeight(nx, nz) + 0.15;
     const newPos = new THREE.Vector3(nx, ny, nz);
 
     const prev = prevPosRef.current || g.position.clone();
@@ -565,6 +636,11 @@ function ZebraInstance({
     g.position.copy(newPos);
     prevPosRef.current = newPos;
   });
+
+  // Don't render if GLTF failed to load
+  if (!cloned) {
+    return null;
+  }
 
   return (
     <group
@@ -590,13 +666,21 @@ function WaterfallInstance({
   scale: [number, number, number];
 }) {
   const gltf: any = useGLTF("/models/animalss/Waterfall.glb");
-  const cloned = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
+  const cloned = useMemo(() => {
+    if (!gltf?.scene) return null;
+    return gltf.scene.clone(true);
+  }, [gltf?.scene]);
   useEffect(() => {
     if (!cloned) return;
     const box = new THREE.Box3().setFromObject(cloned);
     const minY = box.min.y;
-    cloned.position.y -= minY;
+    cloned.position.y = -minY;
   }, [cloned]);
+
+  if (!cloned) {
+    return null;
+  }
+
   return (
     <group
       position={position}
@@ -625,7 +709,8 @@ function AnimalWanderer({
   fly = false,
   minAltitude = 2,
   maxAltitude = 6,
-  yOffset = 0.12,
+  yOffset = 0.18,
+  groundOffset = 0.28,
 }: {
   url: string;
   position: [number, number, number];
@@ -639,9 +724,13 @@ function AnimalWanderer({
   minAltitude?: number;
   maxAltitude?: number;
   yOffset?: number;
+  groundOffset?: number;
 }) {
   const gltf: any = useGLTF(url);
-  const cloned = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
+  const cloned = useMemo(() => {
+    if (!gltf?.scene) return null;
+    return gltf.scene.clone(true);
+  }, [gltf?.scene]);
   const groupRef = useRef<THREE.Group>(null);
   const centerRef = useRef<THREE.Vector3>(
     new THREE.Vector3(position[0], position[1], position[2])
@@ -664,15 +753,19 @@ function AnimalWanderer({
     if (!cloned) return;
     const box = new THREE.Box3().setFromObject(cloned);
     const minY = box.min.y;
-    cloned.position.y -= minY;
     const sizeY = box.max.y - box.min.y;
     const uniformScale = Array.isArray(scale) ? scale[1] : 1;
-    // Keep a small dynamic clearance above ground, proportional to model size and scale
+
+    // Position the model so its bottom sits at y=0
+    cloned.position.y = -minY;
+
+    // Set proper clearance to ensure animals stand on terrain surface
+    // Use a more generous clearance based on model size
     footClearanceRef.current = Math.max(
-      0.02 * uniformScale,
-      sizeY * uniformScale * 0.01
+      0.25 * uniformScale,
+      sizeY * uniformScale * 0.18
     );
-  }, [cloned]);
+  }, [cloned, scale]);
 
   useFrame((state, delta) => {
     const g = groupRef.current;
@@ -692,8 +785,9 @@ function AnimalWanderer({
         altitudeRef.current +
         Math.sin(state.clock.elapsedTime * 1.3) * 0.4 +
         yOffset +
-        footClearanceRef.current
-      : groundY + yOffset + footClearanceRef.current;
+        footClearanceRef.current +
+        groundOffset
+      : groundY + yOffset + footClearanceRef.current + groundOffset;
     const newPos = new THREE.Vector3(nx, ny, nz);
 
     const prev = prevPosRef.current || g.position.clone();
@@ -703,8 +797,24 @@ function AnimalWanderer({
       g.rotation.y = Math.atan2(dx, dz);
     }
     g.position.copy(newPos);
+
+    // Safety: ensure the model never intersects the ground
+    // Compute current world-space bottom of the model and lift if needed
+    const bbox = new THREE.Box3().setFromObject(g);
+    const bottomY = bbox.min.y;
+    const terrainY = groundY;
+    const epsilon = 0.02;
+    if (bottomY < terrainY + epsilon) {
+      const lift = terrainY + epsilon - bottomY;
+      g.position.y += lift;
+    }
     prevPosRef.current = newPos;
   });
+
+  // Don't render if GLTF failed to load
+  if (!cloned) {
+    return null;
+  }
 
   return (
     <group
@@ -728,6 +838,70 @@ function PlayerHumvee() {
   const keysRef = useRef<{ [k: string]: boolean }>({});
   const { camera } = useThree();
   const camDistanceRef = useRef<number>(1.6);
+  // Seamless driving sound (gapless loop) via Web Audio API
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const driveBufferRef = useRef<AudioBuffer | null>(null);
+  const driveSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
+
+  const ensureAudioContext = () => {
+    if (!audioCtxRef.current) {
+      const Ctx =
+        (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx: AudioContext = new Ctx();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.5;
+      gain.connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      gainRef.current = gain;
+    }
+    return audioCtxRef.current as AudioContext;
+  };
+
+  const loadDriveBuffer = async () => {
+    if (driveBufferRef.current) return driveBufferRef.current;
+    const ctx = ensureAudioContext();
+    const res = await fetch("/sound/safari-track.mp3");
+    const arr = await res.arrayBuffer();
+    const buf = await ctx.decodeAudioData(arr.slice(0));
+    driveBufferRef.current = buf;
+    return buf;
+  };
+
+  const startDriveLoop = async () => {
+    const ctx = ensureAudioContext();
+    if (ctx.state === "suspended") {
+      try {
+        await ctx.resume();
+      } catch {}
+    }
+    const buffer = await loadDriveBuffer();
+    if (driveSourceRef.current) {
+      try {
+        driveSourceRef.current.stop();
+      } catch {}
+      driveSourceRef.current.disconnect();
+      driveSourceRef.current = null;
+    }
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.connect(gainRef.current as GainNode);
+    try {
+      source.start(0);
+    } catch {}
+    driveSourceRef.current = source;
+  };
+
+  const stopDriveLoop = () => {
+    if (driveSourceRef.current) {
+      try {
+        driveSourceRef.current.stop();
+      } catch {}
+      driveSourceRef.current.disconnect();
+      driveSourceRef.current = null;
+    }
+  };
 
   // Initial placement near camp
   const startPosition = useMemo<[number, number, number]>(
@@ -736,11 +910,39 @@ function PlayerHumvee() {
   );
 
   useEffect(() => {
+    const isMoveKey = (k: string) =>
+      k === "w" ||
+      k === "a" ||
+      k === "s" ||
+      k === "d" ||
+      k === "arrowup" ||
+      k === "arrowdown" ||
+      k === "arrowleft" ||
+      k === "arrowright";
     const down = (e: KeyboardEvent) => {
-      keysRef.current[e.key.toLowerCase()] = true;
+      const key = e.key.toLowerCase();
+      keysRef.current[key] = true;
+      if (isMoveKey(key)) {
+        // Start seamless loop on first movement key press (user gesture)
+        startDriveLoop();
+      }
     };
     const up = (e: KeyboardEvent) => {
-      keysRef.current[e.key.toLowerCase()] = false;
+      const key = e.key.toLowerCase();
+      keysRef.current[key] = false;
+      // If no movement keys are held, pause the driving audio
+      if (
+        !keysRef.current["w"] &&
+        !keysRef.current["a"] &&
+        !keysRef.current["s"] &&
+        !keysRef.current["d"] &&
+        !keysRef.current["arrowup"] &&
+        !keysRef.current["arrowdown"] &&
+        !keysRef.current["arrowleft"] &&
+        !keysRef.current["arrowright"]
+      ) {
+        stopDriveLoop();
+      }
     };
     const onWheel = (e: WheelEvent) => {
       camDistanceRef.current = Math.min(
@@ -755,6 +957,13 @@ function PlayerHumvee() {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
       window.removeEventListener("wheel", onWheel as any);
+      stopDriveLoop();
+      if (audioCtxRef.current) {
+        try {
+          audioCtxRef.current.close();
+        } catch {}
+        audioCtxRef.current = null;
+      }
     };
   }, []);
 
@@ -842,6 +1051,8 @@ function PlayerHumvee() {
     // Keep grounded
     group.position.y = 0.12;
 
+    // Audio is handled by key handlers for reliable gesture-driven control
+
     // Follow camera
     const camOffset = new THREE.Vector3(
       0,
@@ -861,6 +1072,63 @@ function PlayerHumvee() {
         </group>
       </group>
       <ExhaustSmoke vehicleRef={groupRef} velocityRef={velocityRef} />
+    </>
+  );
+}
+
+// Keyboard zoom hotkeys for OrbitControls (Ctrl/Cmd +/-)
+function CameraHotkeys({ controlsRef }: { controlsRef: React.RefObject<any> }) {
+  const { camera } = useThree();
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const ctrlOrMeta = e.ctrlKey || e.metaKey;
+      if (!ctrlOrMeta) return;
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        if (controlsRef.current?.dollyIn) {
+          controlsRef.current.dollyIn(1.1);
+          controlsRef.current.update?.();
+        } else {
+          // Fallback: adjust FOV if controls not available
+          (camera as THREE.PerspectiveCamera).fov = Math.max(
+            15,
+            (camera as THREE.PerspectiveCamera).fov * 0.95
+          );
+          (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+        }
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        if (controlsRef.current?.dollyOut) {
+          controlsRef.current.dollyOut(1.1);
+          controlsRef.current.update?.();
+        } else {
+          (camera as THREE.PerspectiveCamera).fov = Math.min(
+            120,
+            (camera as THREE.PerspectiveCamera).fov * 1.05
+          );
+          (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, { passive: false } as any);
+    return () => window.removeEventListener("keydown", onKeyDown as any);
+  }, [controlsRef, camera]);
+  return null;
+}
+
+function ControlsAndHotkeys() {
+  const controlsRef = useRef<any>(null);
+  return (
+    <>
+      <CameraHotkeys controlsRef={controlsRef} />
+      <OrbitControls
+        ref={controlsRef}
+        enablePan
+        enableZoom
+        enableRotate
+        minDistance={6}
+        maxDistance={2000}
+      />
     </>
   );
 }
@@ -1327,6 +1595,23 @@ function ParkEnvironment() {
 
 // Main game component
 function GameScene() {
+  // Seeded RNG for stable but rich randomness per load
+  const rand = (() => {
+    const seedRef = useRef<number>(
+      (Date.now() >>> 0) ^ Math.floor(Math.random() * 1e9)
+    );
+    const fnRef = useRef<() => number | null>(null);
+    if (!fnRef.current) {
+      const mulberry32 = (a: number) => () => {
+        let t = (a += 0x6d2b79f5);
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+      fnRef.current = mulberry32(seedRef.current);
+    }
+    return fnRef.current as () => number;
+  })();
   const [gameState, setGameState] = useState<GameState>({
     score: 0,
     health: 100,
@@ -1411,10 +1696,16 @@ function GameScene() {
 
   return (
     <>
-      <PerspectiveCamera makeDefault position={[0, 11, 12]} fov={55} />
+      <PerspectiveCamera
+        makeDefault
+        position={[0, 11, 10]}
+        fov={70}
+        near={0.1}
+        far={5000}
+      />
 
       {/* Scene fog for depth and atmosphere */}
-      <fog attach="fog" args={["#173d22", 120, 900]} />
+      <fog attach="fog" args={["#173d22", 120, 4000]} />
 
       {/* Lighting similar to /animals showcase */}
       <ambientLight intensity={0.6} />
@@ -1481,18 +1772,18 @@ function GameScene() {
 
         {/* Desert and road elements removed as requested */}
 
-        {/* Procedurally scatter more trees with spacing */}
+        {/* Procedurally scatter more trees with spacing (expanded world) */}
         {(() => {
-          const count = 120;
-          const range = 800; // much wider area
+          const count = 220;
+          const range = 1600; // expanded world area
           const minDist2 = 10 * 10; // minimum separation
           const avoidStart = { x: -2, z: 6, r2: 12 * 12 };
           const positions: Array<[number, number, number, number]> = [];
           let attempts = 0;
           while (positions.length < count && attempts < count * 80) {
             attempts++;
-            const x = (Math.random() - 0.5) * (range * 2);
-            const z = (Math.random() - 0.5) * (range * 2);
+            const x = (rand() - 0.5) * (range * 2);
+            const z = (rand() - 0.5) * (range * 2);
             const dx0 = x - avoidStart.x;
             const dz0 = z - avoidStart.z;
             if (dx0 * dx0 + dz0 * dz0 < avoidStart.r2) continue;
@@ -1508,8 +1799,8 @@ function GameScene() {
             }
             if (!ok) continue;
             const y = getTerrainHeight(x, z);
-            const scale = 0.9 + Math.random() * 0.6;
-            const typePick = Math.random();
+            const scale = 0.9 + rand() * 0.6;
+            const typePick = rand();
             positions.push([x, y, z, typePick]);
           }
           return positions.map(([x, y, z, t], i) => (
@@ -1544,10 +1835,10 @@ function GameScene() {
           return items;
         })()}
 
-        {/* Scatter GLB tree varieties with spacing */}
+        {/* Scatter GLB tree varieties with spacing (expanded world) */}
         {(() => {
-          const count = 120;
-          const range = 900;
+          const count = 240;
+          const range = 1800;
           const minDist2 = 12 * 12;
           const avoidStart = { x: -2, z: 6, r2: 14 * 14 };
           const positions: Array<{
@@ -1561,8 +1852,8 @@ function GameScene() {
           let attempts = 0;
           while (positions.length < count && attempts < count * 100) {
             attempts++;
-            const x = (Math.random() - 0.5) * (range * 2);
-            const z = (Math.random() - 0.5) * (range * 2);
+            const x = (rand() - 0.5) * (range * 2);
+            const z = (rand() - 0.5) * (range * 2);
             const dx0 = x - avoidStart.x;
             const dz0 = z - avoidStart.z;
             if (dx0 * dx0 + dz0 * dz0 < avoidStart.r2) continue;
@@ -1581,9 +1872,9 @@ function GameScene() {
               x,
               z,
               y: getTerrainHeight(x, z),
-              pick: Math.random(),
-              rot: Math.random() * Math.PI * 2,
-              s: 0.7 + Math.random() * 1.3,
+              pick: rand(),
+              rot: rand() * Math.PI * 2,
+              s: 0.7 + rand() * 1.3,
             });
           }
           return positions.map((p, i) => {
@@ -1724,12 +2015,13 @@ function GameScene() {
                 url="/models/animalss/Elephant.glb"
                 position={[x, y, z]}
                 rotation={[0, Math.random() * Math.PI * 2, 0]}
-                scale={[0.12, 0.12, 0.12]}
+                scale={[0.02, 0.02, 0.02]}
                 radiusMin={20}
                 radiusMax={35}
                 speedMin={0.06}
                 speedMax={0.1}
-                yOffset={0.35}
+                yOffset={0.5}
+                groundOffset={0.5}
               />
             );
           });
@@ -1746,12 +2038,13 @@ function GameScene() {
                 url="/models/animalss/Giraffe.glb"
                 position={[x, y, z]}
                 rotation={[0, Math.random() * Math.PI * 2, 0]}
-                scale={[0.1, 0.1, 0.1]}
+                scale={[0.075, 0.075, 0.075]}
                 radiusMin={18}
                 radiusMax={30}
                 speedMin={0.08}
                 speedMax={0.14}
-                yOffset={0.5}
+                yOffset={1.1}
+                groundOffset={0.8}
               />
             );
           });
@@ -1768,11 +2061,12 @@ function GameScene() {
                 url="/models/animalss/Lion.glb"
                 position={[x, y, z]}
                 rotation={[0, Math.random() * Math.PI * 2, 0]}
-                scale={[0.1, 0.1, 0.1]}
+                scale={[0.075, 0.075, 0.075]}
                 radiusMin={12}
                 radiusMax={24}
                 speedMin={0.14}
                 speedMax={0.22}
+                groundOffset={0.26}
               />
             );
           });
@@ -1789,12 +2083,13 @@ function GameScene() {
                 url="/models/animalss/Hippopotamus.glb"
                 position={[x, y, z]}
                 rotation={[0, Math.random() * Math.PI * 2, 0]}
-                scale={[0.12, 0.12, 0.12]}
+                scale={[0.09, 0.09, 0.09]}
                 radiusMin={10}
                 radiusMax={20}
                 speedMin={0.06}
                 speedMax={0.1}
                 yOffset={0.08}
+                groundOffset={0.2}
               />
             );
           });
@@ -1811,12 +2106,13 @@ function GameScene() {
                 url="/models/animalss/Gazelle.glb"
                 position={[x, y, z]}
                 rotation={[0, Math.random() * Math.PI * 2, 0]}
-                scale={[0.045, 0.045, 0.045]}
+                scale={[0.035, 0.035, 0.035]}
                 radiusMin={14}
                 radiusMax={26}
                 speedMin={0.16}
                 speedMax={0.28}
-                yOffset={0.24}
+                yOffset={0.32}
+                groundOffset={0.32}
               />
             );
           });
@@ -1833,11 +2129,12 @@ function GameScene() {
                 url="/models/animalss/bird.glb"
                 position={[x, y, z]}
                 rotation={[0, Math.random() * Math.PI * 2, 0]}
-                scale={[0.05, 0.05, 0.05]}
+                scale={[0.02, 0.02, 0.02]}
                 radiusMin={8}
                 radiusMax={16}
                 speedMin={0.2}
                 speedMax={0.3}
+                groundOffset={0.1}
               />
             );
           });
@@ -1854,7 +2151,7 @@ function GameScene() {
                 url="/models/animalss/Hummingbird.glb"
                 position={[x, y, z]}
                 rotation={[0, Math.random() * Math.PI * 2, 0]}
-                scale={[0.03, 0.03, 0.03]}
+                scale={[0.015, 0.015, 0.015]}
                 radiusMin={8}
                 radiusMax={14}
                 speedMin={0.28}
@@ -1862,22 +2159,23 @@ function GameScene() {
                 fly
                 minAltitude={2}
                 maxAltitude={6}
+                groundOffset={0.1}
               />
             );
           });
           return items;
         })()}
-        {/* Scatter GLB rocks spaced apart */}
+        {/* Scatter GLB rocks spaced apart (expanded world) */}
         {(() => {
-          const count = 120;
+          const count = 240;
           const positions: Array<[number, number, number]> = [];
           const minDist2 = 14 * 14;
           const avoidStart = { x: -2, z: 6, r2: 14 * 14 };
           let attempts = 0;
           while (positions.length < count && attempts < count * 50) {
             attempts++;
-            const x = (Math.random() - 0.5) * 1200;
-            const z = (Math.random() - 0.5) * 1200;
+            const x = (rand() - 0.5) * 2000;
+            const z = (rand() - 0.5) * 2000;
             const y = getTerrainHeight(x, z);
             const dx0 = x - avoidStart.x;
             const dz0 = z - avoidStart.z;
@@ -1895,14 +2193,10 @@ function GameScene() {
             if (ok) positions.push([x, y, z]);
           }
           return positions.map((pos, idx) => {
-            const rot: [number, number, number] = [
-              0,
-              Math.random() * Math.PI * 2,
-              0,
-            ];
-            const s = 0.5 + Math.random() * 1.5;
+            const rot: [number, number, number] = [0, rand() * Math.PI * 2, 0];
+            const s = 0.5 + rand() * 1.5;
             const scl: [number, number, number] = [s, s, s];
-            const choice = Math.random();
+            const choice = rand();
             const url =
               choice < 0.25
                 ? "/models/rocks/Rock.glb"
@@ -1940,7 +2234,7 @@ function GameScene() {
         position={[0, 0.01, 0]}
       />
 
-      <OrbitControls enablePan enableZoom enableRotate />
+      <ControlsAndHotkeys />
     </>
   );
 }
@@ -1958,8 +2252,45 @@ export default function GamePage() {
     animalsDefeated: 0,
   });
 
+  // Jungle ambience audio
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isMuted, setIsMuted] = useState<boolean>(true);
+
+  // Initialize audio once
+  useEffect(() => {
+    if (!audioRef.current) {
+      const audio = new Audio("/sound/jungle-sounds.mp3");
+      audio.loop = true;
+      audio.volume = 0.35;
+      audio.muted = isMuted;
+      audioRef.current = audio;
+      if (!isMuted) {
+        audio.play().catch(() => {});
+      }
+    }
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  // React to mute/unmute changes
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.muted = isMuted;
+    if (!isMuted) {
+      audio.play().catch(() => {});
+    } else {
+      audio.pause();
+    }
+  }, [isMuted]);
+
   return (
-    <div className="w-full h-screen relative bg-gradient-to-b from-green-900 via-green-800 to-emerald-900">
+    <div className="w-full h-screen relative bg-gradient-to-b from-sky-800 via-sky-600 to-sky-300">
       {/* Game Header */}
       <div className="absolute top-0 left-0 right-0 z-10 bg-black/40 backdrop-blur-lg border-b border-green-500/30">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -1972,7 +2303,21 @@ export default function GamePage() {
           <h1 className="font-display text-2xl bg-gradient-to-r from-green-200 via-emerald-200 to-teal-200 bg-clip-text text-transparent">
             Safari Adventure Game
           </h1>
-          <div />
+          <button
+            onClick={() => setIsMuted((m) => !m)}
+            className="flex items-center gap-2 text-green-100 hover:text-white transition-colors"
+            aria-label={
+              isMuted ? "Unmute jungle ambience" : "Mute jungle ambience"
+            }
+            title={isMuted ? "Unmute jungle ambience" : "Mute jungle ambience"}
+          >
+            {isMuted ? (
+              <VolumeX className="w-5 h-5" />
+            ) : (
+              <Volume2 className="w-5 h-5" />
+            )}
+            <span>{isMuted ? "Sound Off" : "Sound On"}</span>
+          </button>
         </div>
       </div>
 
@@ -2039,7 +2384,37 @@ export default function GamePage() {
 
       {/* 3D Game Canvas */}
       <Canvas shadows className="w-full h-full">
-        <Suspense fallback={null}>
+        <Suspense
+          fallback={
+            <>
+              <ambientLight intensity={0.8} />
+              <PerspectiveCamera makeDefault position={[0, 5, 5]} />
+              <Text
+                position={[0, 0, 0]}
+                fontSize={1.2}
+                color="#e5ffe5"
+                anchorX="center"
+                anchorY="middle"
+              >
+                Loading Safari Adventure...
+              </Text>
+              <Text
+                position={[0, -1, 0]}
+                fontSize={0.6}
+                color="#ccffcc"
+                anchorX="center"
+                anchorY="middle"
+              >
+                Please wait while we load the animals and environment
+              </Text>
+              {/* Simple loading animation */}
+              <mesh position={[0, -2, 0]} rotation={[0, 0, 0]}>
+                <torusGeometry args={[0.5, 0.1, 8, 16]} />
+                <meshBasicMaterial color="#4ade80" />
+              </mesh>
+            </>
+          }
+        >
           <GameScene />
         </Suspense>
       </Canvas>
