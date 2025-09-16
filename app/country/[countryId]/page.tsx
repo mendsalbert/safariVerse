@@ -377,6 +377,144 @@ export default function CountryPage() {
     setDone(false);
   };
 
+  // --- Landmark Memory Match Mini-Game (emoji-based) ---
+  type EmojiCard = {
+    id: string;
+    keyId: string;
+    emoji: string;
+    matched: boolean;
+    flipped: boolean;
+  };
+  const seedPairs = useMemo(() => {
+    const emojiPool: { keyId: string; emoji: string }[] = [
+      { keyId: "lion", emoji: "🦁" },
+      { keyId: "elephant", emoji: "🐘" },
+      { keyId: "zebra", emoji: "🦓" },
+      { keyId: "giraffe", emoji: "🦒" },
+      { keyId: "rhino", emoji: "🦏" },
+      { keyId: "baobab", emoji: "🌳" },
+      { keyId: "desert", emoji: "🏜️" },
+      { keyId: "pyramid", emoji: "🗿" },
+      { keyId: "scroll", emoji: "📜" },
+      { keyId: "drum", emoji: "🥁" },
+      { keyId: "leopard", emoji: "🐆" },
+      { keyId: "croc", emoji: "🐊" },
+      { keyId: "camel", emoji: "🐪" },
+      { keyId: "eagle", emoji: "🦅" },
+      { keyId: "map", emoji: "🗺️" },
+      { keyId: "hut", emoji: "🛖" },
+      { keyId: "tent", emoji: "⛺" },
+      { keyId: "mask", emoji: "🎭" },
+      { keyId: "earth", emoji: "🌍" },
+      { keyId: "palmtree", emoji: "🌴" },
+      { keyId: "mountain", emoji: "🏞️" },
+      { keyId: "camp", emoji: "🏕️" },
+      { keyId: "compass", emoji: "🧭" },
+      { keyId: "drum2", emoji: "🪘" },
+      { keyId: "basket", emoji: "🧺" },
+      { keyId: "monkey", emoji: "🐒" },
+      { keyId: "parrot", emoji: "🦜" },
+      { keyId: "feather", emoji: "🪶" },
+      { keyId: "sun", emoji: "🔆" },
+      { keyId: "snake", emoji: "🐍" },
+      { keyId: "turtle", emoji: "🐢" },
+    ];
+    const pickCount = 12; // 12 pairs = 24 tiles
+    const pool = [...emojiPool];
+    const chosen: { keyId: string; emoji: string }[] = [];
+    for (let i = 0; i < pickCount && pool.length; i++) {
+      const idx = Math.floor(Math.random() * pool.length);
+      chosen.push(pool.splice(idx, 1)[0]);
+    }
+    const pairs = chosen.flatMap((it, i) => [
+      { id: `${i}-a`, keyId: it.keyId, emoji: it.emoji },
+      { id: `${i}-b`, keyId: it.keyId, emoji: it.emoji },
+    ]);
+    for (let i = pairs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
+    }
+    return pairs;
+  }, []);
+
+  const [cards, setCards] = useState<EmojiCard[]>(
+    seedPairs.map((c) => ({ ...c, matched: false, flipped: false }))
+  );
+  const [firstPick, setFirstPick] = useState<number | null>(null);
+  const [secondPick, setSecondPick] = useState<number | null>(null);
+  const [moves, setMoves] = useState(0);
+  const [seconds, setSeconds] = useState(0);
+  const [running, setRunning] = useState(true);
+
+  useMemo(() => {
+    // restart timer when country changes
+    setSeconds(0);
+    setRunning(true);
+    setMoves(0);
+  }, [countryId]);
+
+  // simple timer
+  useMemo(() => {
+    const t = setInterval(() => {
+      setSeconds((s) => (running ? s + 1 : s));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [running]);
+
+  const allMatched = cards.every((c) => c.matched);
+  useMemo(() => {
+    if (allMatched) setRunning(false);
+  }, [allMatched]);
+
+  const flipCard = (idx: number) => {
+    if (allMatched) return;
+    if (firstPick !== null && secondPick !== null) return;
+    if (cards[idx].flipped || cards[idx].matched) return;
+    setCards((cs) =>
+      cs.map((c, i) => (i === idx ? { ...c, flipped: true } : c))
+    );
+    if (firstPick === null) {
+      setFirstPick(idx);
+    } else if (secondPick === null) {
+      setSecondPick(idx);
+      setMoves((m) => m + 1);
+      const a = cards[firstPick];
+      const b = cards[idx];
+      const isMatch = a.keyId === b.keyId;
+      setTimeout(() => {
+        if (isMatch) {
+          setCards((cs) =>
+            cs.map((c, i) =>
+              i === firstPick || i === idx ? { ...c, matched: true } : c
+            )
+          );
+        } else {
+          setCards((cs) =>
+            cs.map((c, i) =>
+              i === firstPick || i === idx ? { ...c, flipped: false } : c
+            )
+          );
+        }
+        setFirstPick(null);
+        setSecondPick(null);
+      }, 650);
+    }
+  };
+
+  const resetMemory = () => {
+    const randomized = [...seedPairs];
+    for (let i = randomized.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [randomized[i], randomized[j]] = [randomized[j], randomized[i]];
+    }
+    setCards(randomized.map((c) => ({ ...c, matched: false, flipped: false })));
+    setFirstPick(null);
+    setSecondPick(null);
+    setMoves(0);
+    setSeconds(0);
+    setRunning(true);
+  };
+
   return (
     <div className="w-full min-h-screen relative bg-gradient-to-b from-orange-900 via-red-800 to-amber-900">
       {/* SafariVerse Brand Header */}
@@ -467,6 +605,98 @@ export default function CountryPage() {
         </div>
       </div>
 
+      {/* Landmark Memory Match Mini-Game */}
+      <div className="pt-2 pb-10 max-w-6xl mx-auto px-4">
+        <div className="bg-black/50 border border-amber-500/30 rounded-2xl p-6 text-orange-100">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-xl">Landmark Memory Match</h2>
+            <div className="text-sm text-yellow-200 flex items-center gap-4">
+              <span>Time: {seconds}s</span>
+              <span>Moves: {moves}</span>
+              <button
+                onClick={resetMemory}
+                className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:from-orange-600 hover:to-amber-600 transition-colors"
+              >
+                Restart
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-6 gap-3">
+            {cards.map((c, i) => (
+              <button
+                key={c.id + i}
+                onClick={() => flipCard(i)}
+                className="group relative h-24 sm:h-24 md:h-24 rounded-xl overflow-hidden border border-amber-500/30 bg-black/40 hover:bg-black/60 transition-transform duration-200 ease-out hover:scale-[1.03] shadow-sm hover:shadow-lg"
+                aria-label="Flip card"
+              >
+                {/* Flip wrapper */}
+                <div
+                  className="absolute inset-0 [transform-style:preserve-3d] transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                  style={{
+                    transform:
+                      c.flipped || c.matched
+                        ? "rotateY(180deg)"
+                        : "rotateY(0deg)",
+                    willChange: "transform",
+                  }}
+                >
+                  {/* Back face */}
+                  <div
+                    className="absolute inset-0 flex items-center justify-center text-yellow-100/80 text-sm"
+                    style={{ backfaceVisibility: "hidden" }}
+                  >
+                    Click
+                  </div>
+                  {/* Front face */}
+                  <div
+                    className="absolute inset-0 flex items-center justify-center text-4xl"
+                    style={{
+                      backfaceVisibility: "hidden",
+                      transform: "rotateY(180deg)",
+                    }}
+                  >
+                    {c.emoji}
+                  </div>
+                </div>
+                {/* Match glow */}
+                {c.matched && (
+                  <div className="absolute inset-0 ring-2 ring-amber-400/70 rounded-xl pointer-events-none animate-pulse" />
+                )}
+              </button>
+            ))}
+          </div>
+          {allMatched && (
+            <div className="mt-4 text-center text-yellow-100 space-y-3">
+              <div>
+                🎉 You matched all landmarks in {moves} moves and {seconds}s!
+              </div>
+              <button
+                onClick={() => {
+                  try {
+                    const bal = Number(
+                      localStorage.getItem("svtBalance") || "0"
+                    );
+                    const newBal = bal + 20;
+                    localStorage.setItem("svtBalance", String(newBal));
+                    const key = "svtBadges";
+                    const arr = JSON.parse(localStorage.getItem(key) || "[]");
+                    const badge = `Landmark Master: ${facts.name}`;
+                    if (!arr.includes(badge)) {
+                      arr.push(badge);
+                      localStorage.setItem(key, JSON.stringify(arr));
+                    }
+                    alert("+20 SVT awarded and badge unlocked!");
+                  } catch {}
+                }}
+                className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg font-medium hover:from-orange-600 hover:to-amber-600 transition-colors"
+              >
+                Claim 20 SVT + Badge
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Country Quiz */}
       <div className="pt-4 pb-10 max-w-6xl mx-auto px-4">
         <div className="bg-black/50 border border-amber-500/30 rounded-2xl p-6 text-orange-100">
@@ -515,16 +745,52 @@ export default function CountryPage() {
               </div>
             </div>
           ) : (
-            <div className="text-center">
-              <p className="text-lg mb-3 text-yellow-100">
+            <div className="text-center space-y-3">
+              <p className="text-lg text-yellow-100">
                 Great job! You scored {score} out of {quizQuestions.length}.
               </p>
-              <button
-                onClick={restartQuiz}
-                className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg font-medium hover:from-orange-600 hover:to-amber-600 transition-colors"
-              >
-                Play Again
-              </button>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={restartQuiz}
+                  className="bg-black/40 border border-amber-500/30 text-yellow-100 px-4 py-2 rounded-lg font-medium hover:bg-black/60 transition-colors"
+                >
+                  Play Again
+                </button>
+                <button
+                  onClick={() => {
+                    if (score <= 0)
+                      return alert("Answer at least one correctly to claim.");
+                    try {
+                      const bal = Number(
+                        localStorage.getItem("svtBalance") || "0"
+                      );
+                      const reward = score >= quizQuestions.length ? 30 : 10;
+                      const newBal = bal + reward;
+                      localStorage.setItem("svtBalance", String(newBal));
+                      const key = "svtBadges";
+                      const arr = JSON.parse(localStorage.getItem(key) || "[]");
+                      const badge =
+                        score >= quizQuestions.length
+                          ? `Cultural Scholar: ${facts.name}`
+                          : `Quiz Explorer: ${facts.name}`;
+                      if (!arr.includes(badge)) {
+                        arr.push(badge);
+                        localStorage.setItem(key, JSON.stringify(arr));
+                      }
+                      alert(
+                        `+${reward} SVT awarded${
+                          score >= quizQuestions.length
+                            ? " and Scholar badge!"
+                            : "!"
+                        }`
+                      );
+                    } catch {}
+                  }}
+                  className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg font-medium hover:from-orange-600 hover:to-amber-600 transition-colors"
+                >
+                  Claim SVT
+                </button>
+              </div>
             </div>
           )}
         </div>
