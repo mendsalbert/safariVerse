@@ -126,17 +126,17 @@ function CountryPin({
           style={{ pointerEvents: "auto" }}
         >
           <div
-            className="w-3 h-3 flex items-center justify-center rounded-full bg-black/70 border border-white/30"
+            className="w-5 h-5 flex items-center justify-center rounded-full bg-black/70 border border-white/30"
             style={{
               filter: hovered
                 ? `drop-shadow(0 0 8px ${country.color})`
                 : "none",
-              transform: hovered ? "scale(1.2)" : "scale(1)",
+              transform: "scale(1)",
               transition: "all 0.2s ease",
             }}
           >
             <MapPin
-              className="w-3 h-3"
+              className="w-4 h-4"
               style={{ color: hovered ? country.color : "#ffffff" }}
             />
           </div>
@@ -145,7 +145,7 @@ function CountryPin({
       {hovered && (
         <Html
           distanceFactor={10}
-          position={[0, 0.02, 0]}
+          position={[0, 0.06, 0]}
           center
           rotation={tangentRotation}
         >

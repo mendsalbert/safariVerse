@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   MapPin,
@@ -278,6 +278,105 @@ export default function CountryPage() {
     img: string;
   } | null>(null);
 
+  // --- Country Quiz (3 quick questions auto-generated from factsData) ---
+  type Question = {
+    id: string;
+    prompt: string;
+    options: string[];
+    answer: string;
+  };
+
+  const allCountries = useMemo(() => Object.values(factsData), []);
+  const shuffle = (arr: string[]) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+  const sampleDistinct = (pool: string[], exclude: Set<string>, n: number) => {
+    const choices: string[] = [];
+    const filtered = pool.filter((x) => !exclude.has(x));
+    while (choices.length < n && filtered.length) {
+      const idx = Math.floor(Math.random() * filtered.length);
+      const pick = filtered.splice(idx, 1)[0];
+      if (!choices.includes(pick)) choices.push(pick);
+    }
+    return choices;
+  };
+
+  const quizQuestions = useMemo<Question[]>(() => {
+    const others = allCountries.filter((c) => c.name !== facts.name);
+    const capitalsPool = others.map((c) => c.capital);
+    const foodsPool = others.flatMap((c) => c.foods);
+    const languagesPool = others.flatMap((c) => c.languages);
+
+    const q1Answer = facts.capital;
+    const q1Options = shuffle([
+      q1Answer,
+      ...sampleDistinct(capitalsPool, new Set([q1Answer]), 3),
+    ]);
+
+    const q2Answer = facts.foods[0];
+    const q2Options = shuffle([
+      q2Answer,
+      ...sampleDistinct(foodsPool, new Set([q2Answer]), 3),
+    ]);
+
+    const q3Answer = facts.languages[0];
+    const q3Options = shuffle([
+      q3Answer,
+      ...sampleDistinct(languagesPool, new Set([q3Answer]), 3),
+    ]);
+
+    return [
+      {
+        id: "capital",
+        prompt: `What is the capital of ${facts.name}?`,
+        options: q1Options,
+        answer: q1Answer,
+      },
+      {
+        id: "food",
+        prompt: `Which of these is a popular food in ${facts.name}?`,
+        options: q2Options,
+        answer: q2Answer,
+      },
+      {
+        id: "lang",
+        prompt: `Which language is spoken in ${facts.name}?`,
+        options: q3Options,
+        answer: q3Answer,
+      },
+    ];
+  }, [allCountries, facts]);
+
+  const [qIndex, setQIndex] = useState(0);
+  const [score, setScore] = useState(0);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const currentQ = quizQuestions[qIndex];
+
+  const submitAnswer = () => {
+    if (!picked) return;
+    if (picked === currentQ.answer) setScore((s) => s + 1);
+    if (qIndex + 1 < quizQuestions.length) {
+      setQIndex((i) => i + 1);
+      setPicked(null);
+    } else {
+      setDone(true);
+    }
+  };
+
+  const restartQuiz = () => {
+    setQIndex(0);
+    setScore(0);
+    setPicked(null);
+    setDone(false);
+  };
+
   return (
     <div className="w-full min-h-screen relative bg-gradient-to-b from-orange-900 via-red-800 to-amber-900">
       {/* SafariVerse Brand Header */}
@@ -365,6 +464,69 @@ export default function CountryPage() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Country Quiz */}
+      <div className="pt-4 pb-10 max-w-6xl mx-auto px-4">
+        <div className="bg-black/50 border border-amber-500/30 rounded-2xl p-6 text-orange-100">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-xl flex items-center gap-2">
+              Country Quiz: {facts.name}
+            </h2>
+            <span className="text-yellow-200 text-sm">
+              Score: {score}/{quizQuestions.length}
+            </span>
+          </div>
+
+          {!done ? (
+            <div>
+              <p className="mb-4 text-yellow-100">{currentQ.prompt}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {currentQ.options.map((opt) => {
+                  const isSelected = picked === opt;
+                  return (
+                    <button
+                      key={opt}
+                      onClick={() => setPicked(opt)}
+                      className={
+                        "text-left px-4 py-3 rounded-lg border transition-colors " +
+                        (isSelected
+                          ? "bg-amber-500/20 border-amber-400/60"
+                          : "bg-black/40 border-amber-500/30 hover:bg-black/60")
+                      }
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-4 flex items-center justify-between">
+                <span className="text-xs text-yellow-200/80">
+                  Question {qIndex + 1} of {quizQuestions.length}
+                </span>
+                <button
+                  onClick={submitAnswer}
+                  disabled={!picked}
+                  className="bg-gradient-to-r from-orange-500 to-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium hover:from-orange-600 hover:to-amber-600 transition-colors"
+                >
+                  {qIndex + 1 < quizQuestions.length ? "Next" : "Finish"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center">
+              <p className="text-lg mb-3 text-yellow-100">
+                Great job! You scored {score} out of {quizQuestions.length}.
+              </p>
+              <button
+                onClick={restartQuiz}
+                className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg font-medium hover:from-orange-600 hover:to-amber-600 transition-colors"
+              >
+                Play Again
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

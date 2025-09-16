@@ -146,7 +146,7 @@ export default function Home() {
               Marketplace NFT
             </button>
             <button
-              onClick={() => setCurrentView("social")}
+              onClick={() => router.push("/social")}
               className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg font-medium hover:from-orange-600 hover:to-amber-600 transition-colors shadow-lg flex items-center justify-center gap-2"
               aria-label="Open Global Social"
             >
