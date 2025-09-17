@@ -8,7 +8,7 @@ import {
   Float,
   useGLTF,
 } from "@react-three/drei";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import * as THREE from "three";
 import {
@@ -132,7 +132,11 @@ function AfricanMarketplace({
   );
 }
 
-function AfricanArtGallery() {
+function AfricanArtGallery({
+  onArtGalleryClick,
+}: {
+  onArtGalleryClick: () => void;
+}) {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
 
@@ -196,6 +200,7 @@ function AfricanArtGallery() {
         position={[0, 2, 0]}
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
+        onClick={onArtGalleryClick}
       >
         <boxGeometry args={[8, 4, 6]} />
         <meshBasicMaterial
@@ -517,21 +522,35 @@ useGLTF.preload("/artifact/African Cucumber.glb");
 // 3D Artifact Loader Component
 function ArtifactModel({
   modelPath,
-  scale = [1, 1, 1],
   position = [0, 0, 0],
   rotation = [0, 0, 0],
+  targetSize = 1.4,
+  scaleMultiplier = 1,
 }: {
   modelPath: string;
-  scale?: [number, number, number];
   position?: [number, number, number];
   rotation?: [number, number, number];
+  targetSize?: number; // desired max dimension in world units
+  scaleMultiplier?: number; // optional additional multiplier after fitting
 }) {
   const { scene } = useGLTF(modelPath);
 
+  const { fittedScene, finalScale } = useMemo(() => {
+    const cloned = scene.clone(true);
+    // Compute bounding box of the model
+    const box = new THREE.Box3().setFromObject(cloned);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    const fitScale = targetSize / maxDim;
+    const normalizedScale = fitScale * scaleMultiplier;
+    return { fittedScene: cloned, finalScale: normalizedScale };
+  }, [scene, targetSize, scaleMultiplier]);
+
   return (
     <primitive
-      object={scene.clone()}
-      scale={scale}
+      object={fittedScene}
+      scale={[finalScale, finalScale, finalScale]}
       position={position}
       rotation={rotation}
     />
@@ -580,136 +599,61 @@ function ShopItem3D({
     switch (item.id) {
       case "mask1":
         return (
-          <ArtifactModel
-            modelPath="/artifact/African mask sculpture .glb"
-            scale={[2, 2, 2]}
-          />
+          <ArtifactModel modelPath="/artifact/African mask sculpture .glb" />
         );
       case "pottery1":
-        return (
-          <ArtifactModel
-            modelPath="/artifact/African Women Bust.glb"
-            scale={[2, 2, 2]}
-          />
-        );
+        return <ArtifactModel modelPath="/artifact/African Women Bust.glb" />;
       case "textile1":
-        return (
-          <ArtifactModel
-            modelPath="/artifact/Wooden ornament.glb"
-            scale={[2, 2, 2]}
-          />
-        );
+        return <ArtifactModel modelPath="/artifact/Wooden ornament.glb" />;
       case "jewelry1":
         return (
-          <ArtifactModel
-            modelPath="/artifact/African woman wood sculpture .glb"
-            scale={[2, 2, 2]}
-          />
+          <ArtifactModel modelPath="/artifact/African woman wood sculpture .glb" />
         );
       case "artifact1":
         return (
-          <ArtifactModel
-            modelPath="/artifact/African Artifact - Yale Art Gallery.glb"
-            scale={[2, 2, 2]}
-          />
+          <ArtifactModel modelPath="/artifact/African Artifact - Yale Art Gallery.glb" />
         );
       case "fashion1":
         return (
-          <ArtifactModel
-            modelPath="/artifact/%23Fashion%20Bucket%20Hat%20from%20Africa%20.glb"
-            scale={[2, 2, 2]}
-          />
+          <ArtifactModel modelPath="/artifact/%23Fashion%20Bucket%20Hat%20from%20Africa%20.glb" />
         );
       case "plant1":
         return (
-          <ArtifactModel
-            modelPath="/artifact/Little Succulent Plant.glb"
-            scale={[2, 2, 2]}
-          />
+          <ArtifactModel modelPath="/artifact/Little Succulent Plant.glb" />
         );
       case "drum1":
-        return (
-          <ArtifactModel
-            modelPath="/artifact/African Drum.glb"
-            scale={[2, 2, 2]}
-          />
-        );
+        return <ArtifactModel modelPath="/artifact/African Drum.glb" />;
       case "cucumber1":
-        return (
-          <ArtifactModel
-            modelPath="/artifact/African Cucumber.glb"
-            scale={[2, 2, 2]}
-          />
-        );
+        return <ArtifactModel modelPath="/artifact/African Cucumber.glb" />;
       case "nft1":
         return (
-          <ArtifactModel
-            modelPath="/artifact/African Artifact - Yale Art Gallery.glb"
-            scale={[2, 2, 2]}
-          />
+          <ArtifactModel modelPath="/artifact/African Artifact - Yale Art Gallery.glb" />
         );
       case "nft2":
         return (
-          <ArtifactModel
-            modelPath="/artifact/%23Fashion%20Bucket%20Hat%20from%20Africa%20.glb"
-            scale={[2, 2, 2]}
-          />
+          <ArtifactModel modelPath="/artifact/%23Fashion%20Bucket%20Hat%20from%20Africa%20.glb" />
         );
       case "nft3":
         return (
-          <ArtifactModel
-            modelPath="/artifact/Little Succulent Plant.glb"
-            scale={[2, 2, 2]}
-          />
+          <ArtifactModel modelPath="/artifact/Little Succulent Plant.glb" />
         );
       case "nft4":
-        return (
-          <ArtifactModel
-            modelPath="/artifact/African Drum.glb"
-            scale={[2, 2, 2]}
-          />
-        );
+        return <ArtifactModel modelPath="/artifact/African Drum.glb" />;
       case "nft5":
-        return (
-          <ArtifactModel
-            modelPath="/artifact/African Cucumber.glb"
-            scale={[2, 2, 2]}
-          />
-        );
+        return <ArtifactModel modelPath="/artifact/African Cucumber.glb" />;
       case "music1":
-        return (
-          <ArtifactModel
-            modelPath="/artifact/African Drum.glb"
-            scale={[2, 2, 2]}
-          />
-        );
+        return <ArtifactModel modelPath="/artifact/African Drum.glb" />;
       case "music2":
-        return (
-          <ArtifactModel
-            modelPath="/artifact/African Cucumber.glb"
-            scale={[2, 2, 2]}
-          />
-        );
+        return <ArtifactModel modelPath="/artifact/African Cucumber.glb" />;
       case "music3":
         return (
-          <ArtifactModel
-            modelPath="/artifact/African mask sculpture .glb"
-            scale={[2, 2, 2]}
-          />
+          <ArtifactModel modelPath="/artifact/African mask sculpture .glb" />
         );
       case "music4":
-        return (
-          <ArtifactModel
-            modelPath="/artifact/African Women Bust.glb"
-            scale={[2, 2, 2]}
-          />
-        );
+        return <ArtifactModel modelPath="/artifact/African Women Bust.glb" />;
       default:
         return (
-          <ArtifactModel
-            modelPath="/artifact/African mask sculpture .glb"
-            scale={[2, 2, 2]}
-          />
+          <ArtifactModel modelPath="/artifact/African mask sculpture .glb" />
         );
     }
   };
@@ -884,134 +828,35 @@ function ShopEnvironment3D({
   };
 
   const items = shopItems[selectedCategory as keyof typeof shopItems] || [];
-  const itemsPerRow = 3;
-  const rows = Math.ceil(items.length / itemsPerRow);
+
+  // Premium marketplace layout (bright studio + pedestals)
+  const radius = 10;
 
   return (
     <>
-      {/* Shop Floor */}
-      <mesh position={[0, -0.5, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[40, 30]} />
-        <meshStandardMaterial color="#8B4513" roughness={0.8} />
+      {/* Bright Floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]}>
+        <planeGeometry args={[80, 80]} />
+        <meshStandardMaterial color="#f3f4f6" roughness={0.9} />
       </mesh>
 
-      {/* Shop Walls */}
-      <mesh position={[0, 4, -15]}>
-        <boxGeometry args={[40, 8, 0.2]} />
-        <meshStandardMaterial color="#DEB887" roughness={0.7} />
-      </mesh>
-      <mesh position={[-20, 4, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <boxGeometry args={[30, 8, 0.2]} />
-        <meshStandardMaterial color="#DEB887" roughness={0.7} />
-      </mesh>
-      <mesh position={[20, 4, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <boxGeometry args={[30, 8, 0.2]} />
-        <meshStandardMaterial color="#DEB887" roughness={0.7} />
-      </mesh>
-      <mesh position={[0, 4, 15]}>
-        <boxGeometry args={[40, 8, 0.2]} />
-        <meshStandardMaterial color="#DEB887" roughness={0.7} />
-      </mesh>
-
-      {/* Gallery Shelves - Multiple Rows */}
-      {Array.from({ length: rows }, (_, rowIndex) => (
-        <group key={rowIndex}>
-          {/* Shelf Base */}
-          <mesh position={[0, 1.5 + rowIndex * 2.5, -4.5]} rotation={[0, 0, 0]}>
-            <boxGeometry args={[14, 0.2, 1]} />
-            <meshStandardMaterial color="#8B4513" roughness={0.9} />
-          </mesh>
-
-          {/* Shelf Back */}
-          <mesh position={[0, 2.2 + rowIndex * 2.5, -4.5]} rotation={[0, 0, 0]}>
-            <boxGeometry args={[14, 1.4, 0.1]} />
-            <meshStandardMaterial color="#D2B48C" roughness={0.8} />
-          </mesh>
-        </group>
-      ))}
-
-      {/* Character Customization Display */}
-      {/* Professional 3D Display Frame */}
-      <group position={[0, 2, -3.5]}>
-        {/* Main Backdrop Panel */}
-        <mesh>
-          <boxGeometry args={[14, 8, 0.5]} />
-          <meshStandardMaterial
-            color="#1a1a1a"
-            roughness={0.2}
-            metalness={0.8}
-            emissive="#0a0a0a"
-          />
-        </mesh>
-
-        {/* Inner Display Area */}
-        <mesh position={[0, 0, 0.3]}>
-          <planeGeometry args={[12, 6.5]} />
-          <meshStandardMaterial
-            color="#000814"
-            roughness={0.1}
-            emissive="#001122"
-            emissiveIntensity={0.3}
-          />
-        </mesh>
-
-        {/* Ornate Frame Border */}
-        <mesh position={[0, 0, 0.4]}>
-          <ringGeometry args={[6.5, 7, 64]} />
-          <meshStandardMaterial
-            color="#fbbf24"
-            roughness={0.1}
-            metalness={0.9}
-            emissive="#f59e0b"
-            emissiveIntensity={0.2}
-          />
-        </mesh>
-
-        {/* Corner Decorations */}
-        {[
-          [-5.5, 3],
-          [5.5, 3],
-          [-5.5, -3],
-          [5.5, -3],
-        ].map(([x, y], i) => (
-          <mesh key={i} position={[x, y, 0.5]}>
-            <boxGeometry args={[1, 1, 0.2]} />
+      {/* Center focused item on pedestal */}
+      {items[focusedIndex] && (
+        <group position={[0, 2.2, -4]}>
+          {/* Pedestal */}
+          <mesh position={[0, -1.0, 0]}>
+            <cylinderGeometry args={[1.0, 1.2, 0.35, 24]} />
             <meshStandardMaterial
-              color="#fbbf24"
-              roughness={0.1}
-              metalness={0.9}
+              color="#dddddd"
+              roughness={0.3}
+              metalness={0.05}
             />
           </mesh>
-        ))}
-
-        {/* Luxury Base Pedestal */}
-        <mesh position={[0, -4.5, 0]}>
-          <cylinderGeometry args={[4, 5, 0.8, 16]} />
-          <meshStandardMaterial
-            color="#374151"
-            roughness={0.3}
-            metalness={0.7}
-          />
-        </mesh>
-
-        {/* Pedestal Top */}
-        <mesh position={[0, -4.1, 0]}>
-          <cylinderGeometry args={[4.2, 4.2, 0.2, 16]} />
-          <meshStandardMaterial
-            color="#fbbf24"
-            roughness={0.1}
-            metalness={0.9}
-          />
-        </mesh>
-      </group>
-
-      {/* Main Focused Item - Large in Center */}
-      {items[focusedIndex] && (
-        <group>
+          {/* Item */}
           <ShopItem3D
             item={items[focusedIndex]}
-            position={[0, 2, -2]}
-            scale={[3, 3, 3]}
+            position={[0, 0, 0]}
+            scale={[2.0, 2.0, 2.0]}
             onItemClick={onItemClick}
             isHovered={hoveredItem === items[focusedIndex].id}
             onHover={(hovered) =>
@@ -1019,80 +864,64 @@ function ShopEnvironment3D({
             }
             isFocused={true}
           />
-
-          {/* Focus Ring */}
-          <mesh position={[0, 1, -2]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[4, 4.5, 32]} />
-            <meshBasicMaterial color="#FFD700" transparent opacity={0.8} />
-          </mesh>
         </group>
       )}
 
-      {/* Background Items - Carousel Preview */}
+      {/* Background items in a bright arc with pedestals */}
       {items.map((item, index) => {
-        if (index === focusedIndex) return null; // Skip the focused item
-
-        // Position items in a horizontal line behind the frame
-        const totalItems = items.length;
-        const spacing = 4;
-        const startX = (-(totalItems - 1) * spacing) / 2;
-        const x = startX + index * spacing;
-        const z = -8; // Behind the frame
-        const y = 2;
-
-        // Add depth variation for more visual interest
-        const depthOffset = Math.sin(index * 0.5) * 2;
-        const finalZ = z + depthOffset;
-
+        if (index === focusedIndex) return null;
+        const idx = index < focusedIndex ? index : index - 1;
+        const total = items.length - 1;
+        const angle =
+          ((idx - (total - 1) / 2) / Math.max(total - 1, 1)) * Math.PI * 0.65;
+        const x = Math.sin(angle) * radius;
+        const z = -6 - Math.cos(angle) * radius;
+        const y = 1.9;
+        const tilt = -angle * 0.35;
         return (
-          <group key={item.id}>
+          <group key={item.id} position={[x, y, z]} rotation={[0, tilt, 0]}>
+            {/* Pedestal */}
+            <mesh position={[0, -1.0, 0]}>
+              <cylinderGeometry args={[0.9, 1.1, 0.35, 24]} />
+              <meshStandardMaterial
+                color="#e5e7eb"
+                roughness={0.35}
+                metalness={0.05}
+              />
+            </mesh>
+            {/* Item */}
             <ShopItem3D
               item={item}
-              position={[x, y, finalZ]}
-              scale={[1.2, 1.2, 1.2]}
+              position={[0, 0, 0]}
+              scale={[1.0, 1.0, 1.0]}
               onItemClick={() => setFocusedIndex(index)}
               isHovered={hoveredItem === item.id}
               onHover={(hovered) => onHover(hovered ? item.id : null)}
               isFocused={false}
             />
-            {/* Subtle glow for background items */}
-            <mesh
-              position={[x, y - 0.5, finalZ]}
-              rotation={[-Math.PI / 2, 0, 0]}
-            >
-              <ringGeometry args={[1.5, 2, 16]} />
-              <meshBasicMaterial color="#fbbf24" transparent opacity={0.2} />
-            </mesh>
           </group>
         );
       })}
 
-      {/* Professional Display Lighting */}
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[0, 15, 10]} intensity={1.0} />
-
-      {/* Main Display Spotlight */}
-      <spotLight
-        position={[0, 8, 0]}
-        target-position={[0, 2, -2]}
-        intensity={4.0}
-        angle={0.5}
-        penumbra={0.2}
-        color="#FFD700"
-        castShadow
+      {/* Bright Studio Lighting */}
+      <ambientLight intensity={0.8} />
+      <hemisphereLight args={[0xffffff, 0xdddddd, 0.9]} />
+      <directionalLight
+        position={[8, 12, 10]}
+        intensity={1.2}
+        color={0xffffff}
       />
-
-      {/* Frame Accent Lighting */}
-      <pointLight position={[0, 2, -3]} intensity={2.0} color="#fbbf24" />
-      <pointLight position={[-7, 2, -3.5]} intensity={1.5} color="#f59e0b" />
-      <pointLight position={[7, 2, -3.5]} intensity={1.5} color="#f59e0b" />
-
-      {/* Background Item Lighting */}
-      <pointLight position={[0, 4, -8]} intensity={0.6} color="#FFFFFF" />
-
-      {/* Room Ambient Lighting */}
-      <pointLight position={[-10, 6, 5]} intensity={0.8} color="#FFA500" />
-      <pointLight position={[10, 6, 5]} intensity={0.8} color="#FFA500" />
+      <directionalLight
+        position={[-8, 10, -6]}
+        intensity={0.9}
+        color={0xffffff}
+      />
+      <spotLight
+        position={[0, 12, 2]}
+        angle={0.4}
+        intensity={2.0}
+        color={0xffffff}
+      />
     </>
   );
 }
@@ -1323,7 +1152,7 @@ function VirtualShop({
       <div className="absolute inset-0">
         <Canvas
           camera={{ position: [0, 8, 12], fov: 75 }}
-          style={{ background: "linear-gradient(to bottom, #1a1a2e, #16213e)" }}
+          style={{ background: "linear-gradient(to bottom, #faf7f2, #efe7db)" }}
         >
           <OrbitControls
             enablePan
@@ -1349,12 +1178,47 @@ function VirtualShop({
       {/* Minimal UI Overlay */}
       <div className="absolute top-4 left-4 z-10">
         <div className="flex items-center gap-3">
+          {/* Close shop: return to virtual world */}
+          <button
+            onClick={onClose}
+            className="flex items-center gap-2 text-white hover:text-amber-300 transition-colors bg-black/40 hover:bg-black/60 px-3 py-2 rounded-lg backdrop-blur-sm"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+            Close
+          </button>
+          {/* Back to previous page */}
           <button
             onClick={onBackToMain}
             className="flex items-center gap-2 text-white hover:text-amber-300 transition-colors bg-black/40 hover:bg-black/60 px-3 py-2 rounded-lg backdrop-blur-sm"
           >
-            <ArrowLeft className="w-4 h-4" /> Back
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            Back
           </button>
+          {/* Close X */}
           <button
             onClick={onClose}
             className="text-white hover:text-red-400 text-xl font-bold bg-black/40 hover:bg-black/60 px-3 py-2 rounded-lg backdrop-blur-sm"
@@ -1382,10 +1246,11 @@ function VirtualShop({
       )}
 
       {/* Carousel Navigation - Bottom Center */}
-      <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10">
+      <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10 pointer-events-auto">
         <div className="flex items-center gap-4 bg-black/70 backdrop-blur-lg rounded-full px-6 py-3 border border-amber-500/30">
           {/* Previous Button */}
           <button
+            type="button"
             onClick={() =>
               setFocusedIndex((prev) =>
                 prev === 0 ? items.length - 1 : prev - 1
@@ -1427,6 +1292,7 @@ function VirtualShop({
 
           {/* Next Button */}
           <button
+            type="button"
             onClick={() =>
               setFocusedIndex((prev) =>
                 prev === items.length - 1 ? 0 : prev + 1
@@ -1515,14 +1381,22 @@ function VirtualShop({
                   </div>
                 </div>
               ))}
-              <div className="border-t border-amber-400/30 pt-2 mt-2">
+              <div className="border-t border-amber-400/30 pt-2 mt-2 space-y-2">
                 <div className="flex justify-between items-center text-lg font-bold text-yellow-100">
                   <span>Total:</span>
                   <span>{getTotalPrice()} SVT</span>
                 </div>
-                <button className="w-full mt-2 bg-gradient-to-r from-yellow-500 to-amber-500 text-white py-2 rounded-lg font-bold hover:from-yellow-600 hover:to-amber-600 transition-all">
-                  Checkout
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCart([])}
+                    className="w-1/2 bg-black/40 text-orange-100 hover:bg-black/60 rounded py-2 text-sm font-semibold"
+                  >
+                    Clear
+                  </button>
+                  <button className="w-1/2 bg-gradient-to-r from-yellow-500 to-amber-500 text-white py-2 rounded-lg font-bold hover:from-yellow-600 hover:to-amber-600 transition-all text-sm">
+                    Checkout
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1614,7 +1488,7 @@ function SafariMartUI({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => window.history.back()}
+                onClick={onBackToMain}
                 className="flex items-center gap-2 text-orange-100 hover:text-white transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" /> Back
@@ -1844,9 +1718,11 @@ function SafariMartUI({
 function SafariMartScene({
   countryId,
   onMarketplaceClick,
+  onArtGalleryClick,
 }: {
   countryId: string;
   onMarketplaceClick: () => void;
+  onArtGalleryClick: () => void;
 }) {
   return (
     <>
@@ -1870,7 +1746,7 @@ function SafariMartScene({
 
       {/* Cultural Buildings */}
       <AfricanMarketplace onMarketplaceClick={onMarketplaceClick} />
-      <AfricanArtGallery />
+      <AfricanArtGallery onArtGalleryClick={onArtGalleryClick} />
       <MusicStage />
       <TradingPost />
       <SocialHub />
@@ -1909,6 +1785,7 @@ export default function SafariMartPage() {
         <SafariMartScene
           countryId={countryId}
           onMarketplaceClick={() => setIsShopOpen(true)}
+          onArtGalleryClick={() => router.push(`/artgallery/${countryId}`)}
         />
       </Canvas>
 
@@ -1917,7 +1794,7 @@ export default function SafariMartPage() {
         countryId={countryId}
         isShopOpen={isShopOpen}
         setIsShopOpen={setIsShopOpen}
-        onBackToMain={() => router.push("/")}
+        onBackToMain={() => router.back()}
       />
     </div>
   );
