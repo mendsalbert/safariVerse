@@ -1,12 +1,13 @@
 "use client";
 
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   OrbitControls,
   PerspectiveCamera,
   Text,
   Float,
   useGLTF,
+  FirstPersonControls,
 } from "@react-three/drei";
 import { useRef, useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -32,6 +33,198 @@ import {
   Crown,
   Sparkles,
 } from "lucide-react";
+
+// Simple loading overlay
+function LoadingOverlay({ text }: { text: string }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="flex items-center gap-3 text-yellow-100">
+        <svg
+          className="w-6 h-6 animate-spin text-yellow-400"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          ></circle>
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+          ></path>
+        </svg>
+        <span className="font-semibold">{text}</span>
+      </div>
+    </div>
+  );
+}
+
+// Enhanced Camera Controller
+function CameraController() {
+  const { camera, gl } = useThree();
+  const moveSpeed = 0.3;
+  const lookSpeed = 0.002;
+  const keys = useRef({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    up: false,
+    down: false,
+  });
+  const mouse = useRef({ x: 0, y: 0 });
+  const isMouseDown = useRef(false);
+  const pitch = useRef(0);
+  const yaw = useRef(0);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      switch (event.code) {
+        case "KeyW":
+          keys.current.forward = true;
+          break;
+        case "KeyS":
+          keys.current.backward = true;
+          break;
+        case "KeyA":
+          keys.current.left = true;
+          break;
+        case "KeyD":
+          keys.current.right = true;
+          break;
+        case "KeyQ":
+          keys.current.up = true;
+          break;
+        case "KeyE":
+          keys.current.down = true;
+          break;
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      switch (event.code) {
+        case "KeyW":
+          keys.current.forward = false;
+          break;
+        case "KeyS":
+          keys.current.backward = false;
+          break;
+        case "KeyA":
+          keys.current.left = false;
+          break;
+        case "KeyD":
+          keys.current.right = false;
+          break;
+        case "KeyQ":
+          keys.current.up = false;
+          break;
+        case "KeyE":
+          keys.current.down = false;
+          break;
+      }
+    };
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button === 0) {
+        isMouseDown.current = true;
+        gl.domElement.style.cursor = "grabbing";
+      }
+    };
+
+    const handleMouseUp = (event: MouseEvent) => {
+      if (event.button === 0) {
+        isMouseDown.current = false;
+        gl.domElement.style.cursor = "grab";
+      }
+    };
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (isMouseDown.current) {
+        const deltaX = event.movementX;
+        const deltaY = event.movementY;
+
+        yaw.current -= deltaX * lookSpeed;
+        pitch.current -= deltaY * lookSpeed;
+
+        // Clamp pitch to prevent over-rotation
+        pitch.current = Math.max(
+          -Math.PI / 2,
+          Math.min(Math.PI / 2, pitch.current)
+        );
+
+        // Update camera rotation
+        camera.rotation.order = "YXZ";
+        camera.rotation.y = yaw.current;
+        camera.rotation.x = pitch.current;
+      }
+    };
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const direction = new THREE.Vector3();
+      camera.getWorldDirection(direction);
+      camera.position.addScaledVector(direction, event.deltaY * 0.01);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    gl.domElement.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mouseup", handleMouseUp);
+    gl.domElement.addEventListener("mousemove", handleMouseMove);
+    gl.domElement.addEventListener("wheel", handleWheel);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      gl.domElement.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mouseup", handleMouseUp);
+      gl.domElement.removeEventListener("mousemove", handleMouseMove);
+      gl.domElement.removeEventListener("wheel", handleWheel);
+    };
+  }, [camera, gl]);
+
+  useFrame(() => {
+    const direction = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+
+    camera.getWorldDirection(direction);
+    right.crossVectors(direction, camera.up).normalize();
+    up.set(0, 1, 0);
+
+    if (keys.current.forward) {
+      camera.position.addScaledVector(direction, moveSpeed);
+    }
+    if (keys.current.backward) {
+      camera.position.addScaledVector(direction, -moveSpeed);
+    }
+    if (keys.current.left) {
+      camera.position.addScaledVector(right, -moveSpeed);
+    }
+    if (keys.current.right) {
+      camera.position.addScaledVector(right, moveSpeed);
+    }
+    if (keys.current.up) {
+      camera.position.addScaledVector(up, moveSpeed);
+    }
+    if (keys.current.down) {
+      camera.position.addScaledVector(up, -moveSpeed);
+    }
+
+    // Keep camera above ground
+    if (camera.position.y < 1) {
+      camera.position.y = 1;
+    }
+  });
+
+  return null;
+}
 
 // African Cultural Environment Components
 function AfricanMarketplace({
@@ -107,8 +300,15 @@ function AfricanMarketplace({
       <mesh
         position={[0, 0.1, 0]}
         onClick={onMarketplaceClick}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
+        onPointerOver={(e) => {
+          setHovered(true);
+          e.stopPropagation();
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          setHovered(false);
+          document.body.style.cursor = "auto";
+        }}
       >
         <cylinderGeometry args={[15, 15, 0.1, 32]} />
         <meshBasicMaterial
@@ -198,8 +398,15 @@ function AfricanArtGallery({
       {/* Clickable Area for Art Gallery */}
       <mesh
         position={[0, 2, 0]}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
+        onPointerOver={(e) => {
+          setHovered(true);
+          e.stopPropagation();
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          setHovered(false);
+          document.body.style.cursor = "auto";
+        }}
         onClick={onArtGalleryClick}
       >
         <boxGeometry args={[8, 4, 6]} />
@@ -224,90 +431,227 @@ function AfricanArtGallery({
   );
 }
 
-function MusicStage() {
+function MusicStage({ onMusicStageClick }: { onMusicStageClick: () => void }) {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
 
+  // simple tempo for lights/equalizer
   useFrame((state) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y =
-        Math.sin(state.clock.elapsedTime * 0.3) * 0.1;
-    }
+    if (!groupRef.current) return;
+    const t = state.clock.elapsedTime;
+    groupRef.current.rotation.y = Math.sin(t * 0.15) * 0.06;
   });
+
+  // helper: build a stacked speaker
+  const SpeakerStack = ({
+    position,
+  }: {
+    position: [number, number, number];
+  }) => (
+    <group position={position}>
+      {[0, 1, 2].map((i) => (
+        <mesh key={i} position={[0, 0.8 * i + 0.6, 0]}>
+          <boxGeometry args={[0.9, 0.8, 0.5]} />
+          <meshStandardMaterial
+            color="#1f2937"
+            roughness={0.6}
+            metalness={0.1}
+          />
+        </mesh>
+      ))}
+      {/* speaker cones */}
+      {[0, 1, 2].map((i) => (
+        <mesh key={`cone-${i}`} position={[0, 0.8 * i + 0.6, 0.26]}>
+          <circleGeometry args={[0.22, 24]} />
+          <meshStandardMaterial
+            color="#111827"
+            metalness={0.2}
+            roughness={0.4}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+
+  // helper: simple animated equalizer bar
+  const Equalizer = () => {
+    const bars = new Array(8).fill(0);
+    const refs = useRef<Array<THREE.Mesh | null>>(bars.map(() => null));
+    useFrame((state) => {
+      const t = state.clock.elapsedTime;
+      refs.current.forEach((m, i) => {
+        if (!m) return;
+        const h = 0.4 + 0.6 * Math.abs(Math.sin(t * 2 + i * 0.5));
+        m.scale.y = h;
+      });
+    });
+    return (
+      <group position={[0, 1.05, 0.2]}>
+        {bars.map((_, i) => (
+          <mesh
+            key={i}
+            ref={(el) => (refs.current[i] = el)}
+            position={[i * 0.25 - (bars.length * 0.25) / 2 + 0.25, 0, 0]}
+          >
+            <boxGeometry args={[0.18, 0.5, 0.1]} />
+            <meshStandardMaterial
+              color="#10b981"
+              emissive="#064e3b"
+              emissiveIntensity={0.6}
+            />
+          </mesh>
+        ))}
+      </group>
+    );
+  };
 
   return (
     <group ref={groupRef} position={[-25, 0, 0]}>
       {/* Stage Platform */}
-      <mesh position={[0, 0.5, 0]}>
-        <boxGeometry args={[6, 1, 4]} />
-        <meshStandardMaterial color="#8B4513" roughness={0.8} />
+      <mesh position={[0, 0.35, 0]}>
+        <boxGeometry args={[10, 0.7, 6]} />
+        <meshStandardMaterial color="#3f2a1f" roughness={0.8} />
       </mesh>
 
-      {/* Drum Set */}
-      <group position={[-1, 1.2, 0]}>
-        <mesh>
-          <cylinderGeometry args={[0.3, 0.3, 0.8]} />
-          <meshStandardMaterial color="#8B4513" roughness={0.7} />
-        </mesh>
-        <mesh position={[0, 0.5, 0]}>
-          <cylinderGeometry args={[0.4, 0.4, 0.1]} />
-          <meshStandardMaterial color="#2F4F4F" roughness={0.3} />
-        </mesh>
+      {/* Dance Floor */}
+      <group position={[0, 0.02, 0]}>
+        {[-2, -1, 0, 1, 2].map((x) =>
+          [-2, -1, 0, 1, 2].map((z) => (
+            <mesh
+              key={`${x}-${z}`}
+              position={[x * 0.9, 0, z * 0.9]}
+              rotation={[-Math.PI / 2, 0, 0]}
+            >
+              <planeGeometry args={[0.85, 0.85]} />
+              <meshStandardMaterial
+                color={(x + z) % 2 === 0 ? "#1f2937" : "#374151"}
+                roughness={0.8}
+              />
+            </mesh>
+          ))
+        )}
       </group>
 
-      {/* Microphone */}
-      <group position={[1, 1.5, 0]}>
+      {/* DJ Booth */}
+      <group position={[0, 1.1, -1.6]}>
+        {/* Booth table */}
         <mesh>
-          <cylinderGeometry args={[0.05, 0.05, 1]} />
+          <boxGeometry args={[3.2, 0.3, 1.2]} />
           <meshStandardMaterial
-            color="#C0C0C0"
-            roughness={0.1}
-            metalness={0.8}
+            color="#111827"
+            roughness={0.6}
+            metalness={0.2}
           />
         </mesh>
-        <mesh position={[0, 0.6, 0]}>
-          <sphereGeometry args={[0.1]} />
-          <meshStandardMaterial
-            color="#C0C0C0"
-            roughness={0.1}
-            metalness={0.8}
-          />
-        </mesh>
-      </group>
-
-      {/* Speakers */}
-      {[-2, 2].map((x, i) => (
-        <group key={i} position={[x, 1.5, -1.5]}>
+        {/* Turntables */}
+        {[-0.8, 0.8].map((x, i) => (
+          <group key={i} position={[x, 0.25, 0]}>
+            <mesh>
+              <cylinderGeometry args={[0.35, 0.35, 0.06, 32]} />
+              <meshStandardMaterial
+                color="#0f766e"
+                metalness={0.3}
+                roughness={0.4}
+              />
+            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0.12, 0.06, 0.12]}>
+              <cylinderGeometry args={[0.05, 0.05, 0.02, 12]} />
+              <meshStandardMaterial
+                color="#d1d5db"
+                metalness={0.7}
+                roughness={0.2}
+              />
+            </mesh>
+          </group>
+        ))}
+        {/* Mixer */}
+        <group position={[0, 0.25, 0]}>
           <mesh>
-            <boxGeometry args={[0.8, 1.2, 0.4]} />
-            <meshStandardMaterial color="#2F4F4F" roughness={0.6} />
+            <boxGeometry args={[0.8, 0.06, 0.5]} />
+            <meshStandardMaterial color="#1f2937" />
           </mesh>
+          <Equalizer />
         </group>
-      ))}
+      </group>
+
+      {/* DJ (stylized) */}
+      <group position={[0, 1.9, -1.6]}>
+        <mesh>
+          <sphereGeometry args={[0.25, 20, 20]} />
+          <meshStandardMaterial color="#fde68a" />
+        </mesh>
+        <mesh position={[0, -0.5, 0]}>
+          <cylinderGeometry args={[0.18, 0.22, 0.6, 12]} />
+          <meshStandardMaterial color="#111827" />
+        </mesh>
+        {/* arms */}
+        <mesh position={[-0.25, -0.4, 0]} rotation={[0, 0, Math.PI / 6]}>
+          <cylinderGeometry args={[0.04, 0.04, 0.6, 8]} />
+          <meshStandardMaterial color="#111827" />
+        </mesh>
+        <mesh position={[0.25, -0.4, 0]} rotation={[0, 0, -Math.PI / 6]}>
+          <cylinderGeometry args={[0.04, 0.04, 0.6, 8]} />
+          <meshStandardMaterial color="#111827" />
+        </mesh>
+      </group>
+
+      {/* Speaker Stacks */}
+      <SpeakerStack position={[-4.2, 0.5, -1.6]} />
+      <SpeakerStack position={[4.2, 0.5, -1.6]} />
+
+      {/* Overhead Truss with moving lights */}
+      <group position={[0, 3.2, 0]}>
+        <mesh>
+          <boxGeometry args={[8, 0.15, 0.15]} />
+          <meshStandardMaterial
+            color="#374151"
+            metalness={0.2}
+            roughness={0.7}
+          />
+        </mesh>
+        {[-3, -1, 1, 3].map((x, i) => (
+          <spotLight
+            key={i}
+            position={[x, 0, 0]}
+            angle={0.5}
+            intensity={1.6}
+            color={i % 2 === 0 ? 0x00ffff : 0xff00ff}
+            target-position={[0, 0, 0]}
+          />
+        ))}
+      </group>
 
       {/* Clickable Area for Music Stage */}
       <mesh
-        position={[0, 0.5, 0]}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
+        position={[0, 0.35, 0]}
+        onPointerOver={(e) => {
+          setHovered(true);
+          e.stopPropagation();
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          setHovered(false);
+          document.body.style.cursor = "auto";
+        }}
+        onClick={onMusicStageClick}
       >
-        <boxGeometry args={[6, 1, 4]} />
+        <boxGeometry args={[10, 0.7, 6]} />
         <meshBasicMaterial
-          color={hovered ? "#FFD700" : "#8B4513"}
+          color={hovered ? "#FFD700" : "#3f2a1f"}
           transparent
-          opacity={hovered ? 0.3 : 0}
+          opacity={hovered ? 0.25 : 0}
         />
       </mesh>
 
       {/* Music Stage Label */}
       <Text
-        position={[0, 3, 0]}
-        fontSize={1.2}
+        position={[0, 3.8, 0]}
+        fontSize={1.3}
         color={hovered ? "#FFD700" : "#FFFFFF"}
         anchorX="center"
         anchorY="middle"
       >
-        Music Stage
+        Music Stage (DJ Set)
       </Text>
     </group>
   );
@@ -365,8 +709,15 @@ function TradingPost() {
       {/* Clickable Area for Trading Post */}
       <mesh
         position={[0, 2, 0]}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
+        onPointerOver={(e) => {
+          setHovered(true);
+          e.stopPropagation();
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          setHovered(false);
+          document.body.style.cursor = "auto";
+        }}
       >
         <boxGeometry args={[6, 4, 4]} />
         <meshBasicMaterial
@@ -439,8 +790,15 @@ function SocialHub() {
       {/* Clickable Area for Social Hub */}
       <mesh
         position={[0, 2, 0]}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
+        onPointerOver={(e) => {
+          setHovered(true);
+          e.stopPropagation();
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          setHovered(false);
+          document.body.style.cursor = "auto";
+        }}
       >
         <boxGeometry args={[8, 4, 6]} />
         <meshBasicMaterial
@@ -669,27 +1027,7 @@ function ShopItem3D({
         {getArtifactModel()}
       </group>
 
-      {/* Item Label */}
-      <Text
-        position={[0, 0.8, 0]}
-        fontSize={isFocused ? 0.3 : 0.25}
-        color={isFocused ? "#FFD700" : isHovered ? "#FFD700" : "#FFFFFF"}
-        anchorX="center"
-        anchorY="middle"
-      >
-        {item.name}
-      </Text>
-
-      {/* Price Label */}
-      <Text
-        position={[0, -0.3, 0]}
-        fontSize={isFocused ? 0.22 : 0.18}
-        color={isFocused ? "#FFD700" : "#FFD700"}
-        anchorX="center"
-        anchorY="middle"
-      >
-        {item.price} SVT
-      </Text>
+      {/* Removed in-scene title and price labels for a cleaner display */}
     </group>
   );
 }
@@ -1230,18 +1568,8 @@ function VirtualShop({
 
       {/* Current Item Display - Bottom Right */}
       {items[focusedIndex] && (
-        <div className="absolute bottom-4 right-4 z-10">
-          <div className="bg-black/60 backdrop-blur-lg rounded-lg p-3 border border-amber-500/30 max-w-xs">
-            <h3 className="text-lg font-bold text-amber-300 mb-1">
-              {items[focusedIndex].name}
-            </h3>
-            <p className="text-amber-200 text-sm font-semibold">
-              {items[focusedIndex].price} SVT
-            </p>
-            <p className="text-gray-300 text-xs mt-1">
-              Item {focusedIndex + 1} of {items.length}
-            </p>
-          </div>
+        <div className="hidden">
+          {/* Moved info into bottom control center */}
         </div>
       )}
 
@@ -1273,8 +1601,20 @@ function VirtualShop({
             </svg>
           </button>
 
+          {/* Focused Item Info */}
+          {items[focusedIndex] && (
+            <div className="flex items-center gap-3 px-4">
+              <div className="text-amber-300 font-semibold">
+                {items[focusedIndex].name}
+              </div>
+              <div className="text-yellow-400 font-bold">
+                {items[focusedIndex].price} SVT
+              </div>
+            </div>
+          )}
+
           {/* Item Counter */}
-          <div className="flex items-center gap-2 px-4">
+          <div className="flex items-center gap-2 px-2">
             <div className="flex gap-1">
               {items.map((_, index) => (
                 <div
@@ -1336,12 +1676,34 @@ function VirtualShop({
         </div>
       </div>
 
-      {/* Instructions - Top Right */}
+      {/* Control Instructions - Top Right */}
       <div className="absolute top-4 right-4 z-10">
-        <div className="bg-black/40 backdrop-blur-sm rounded-lg p-2 border border-amber-500/30">
-          <p className="text-amber-300 text-xs">
-            🎮 Arrow Keys • Enter/Space • ESC
-          </p>
+        <div className="bg-black/60 backdrop-blur-lg rounded-lg p-4 border border-amber-500/30 max-w-xs">
+          <h3 className="text-amber-300 font-semibold mb-2 text-sm">
+            🎮 Controls
+          </h3>
+          <div className="space-y-1 text-xs text-orange-200">
+            <div className="flex justify-between">
+              <span>WASD:</span>
+              <span className="text-yellow-300">Move</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Q/E:</span>
+              <span className="text-yellow-300">Up/Down</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Mouse:</span>
+              <span className="text-yellow-300">Look Around</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Scroll:</span>
+              <span className="text-yellow-300">Zoom</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Click:</span>
+              <span className="text-yellow-300">Interact</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1403,11 +1765,32 @@ function VirtualShop({
         </div>
       </div>
 
-      {/* Instructions */}
+      {/* Control Instructions - Bottom Left */}
       <div className="absolute bottom-4 left-4 z-10">
-        <div className="bg-black/60 backdrop-blur-lg rounded-xl p-3 border border-amber-500/30">
-          <p className="text-orange-200 text-sm">
-            Click on items to add to cart • Use mouse to rotate view
+        <div className="bg-black/60 backdrop-blur-lg rounded-xl p-4 border border-amber-500/30 max-w-sm">
+          <h3 className="text-amber-300 font-semibold mb-2 text-sm">
+            🎮 Movement Controls
+          </h3>
+          <div className="grid grid-cols-2 gap-2 text-xs text-orange-200">
+            <div className="flex justify-between">
+              <span>WASD:</span>
+              <span className="text-yellow-300">Move</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Q/E:</span>
+              <span className="text-yellow-300">Up/Down</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Mouse:</span>
+              <span className="text-yellow-300">Look</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Scroll:</span>
+              <span className="text-yellow-300">Zoom</span>
+            </div>
+          </div>
+          <p className="text-orange-200 text-xs mt-2">
+            Click on buildings to enter shops
           </p>
         </div>
       </div>
@@ -1421,11 +1804,21 @@ function SafariMartUI({
   isShopOpen,
   setIsShopOpen,
   onBackToMain,
+  controlMode,
+  setControlMode,
+  onOpenMarketplace,
+  onOpenGallery,
+  onOpenMusic,
 }: {
   countryId: string;
   isShopOpen: boolean;
   setIsShopOpen: (open: boolean) => void;
   onBackToMain: () => void;
+  controlMode: "firstPerson" | "orbit";
+  setControlMode: (mode: "firstPerson" | "orbit") => void;
+  onOpenMarketplace: () => void;
+  onOpenGallery: () => void;
+  onOpenMusic: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<
     "marketplace" | "gallery" | "music" | "trading" | "social"
@@ -1494,7 +1887,7 @@ function SafariMartUI({
                 <ArrowLeft className="w-5 h-5" /> Back
               </button>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-200 via-yellow-200 to-red-200 bg-clip-text text-transparent">
-                SafariMart -{" "}
+                Safariverse -{" "}
                 {countryId.charAt(0).toUpperCase() + countryId.slice(1)}
               </h1>
             </div>
@@ -1503,6 +1896,26 @@ function SafariMartUI({
                 <Coins className="w-5 h-5 text-yellow-400" />
                 <span className="font-semibold">{balance} SVT</span>
               </div>
+
+              {/* Control Mode Toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-orange-100 text-sm">Controls:</span>
+                <button
+                  onClick={() =>
+                    setControlMode(
+                      controlMode === "firstPerson" ? "orbit" : "firstPerson"
+                    )
+                  }
+                  className={`px-3 py-1 rounded text-sm font-medium transition-all ${
+                    controlMode === "firstPerson"
+                      ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                      : "bg-black/40 text-orange-100 hover:bg-black/60"
+                  }`}
+                >
+                  {controlMode === "firstPerson" ? "WASD" : "Orbit"}
+                </button>
+              </div>
+
               <button
                 onClick={() => setIsMuted(!isMuted)}
                 className="text-orange-100 hover:text-white transition-colors"
@@ -1528,7 +1941,16 @@ function SafariMartUI({
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => {
+                    setActiveTab(tab.id as any);
+                    if (tab.id === "marketplace") {
+                      onOpenMarketplace();
+                    } else if (tab.id === "gallery") {
+                      onOpenGallery();
+                    } else if (tab.id === "music") {
+                      onOpenMusic();
+                    }
+                  }}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
                     isActive
                       ? `bg-gradient-to-r ${tab.color} text-white`
@@ -1562,7 +1984,7 @@ function SafariMartUI({
                 <div className="flex items-center justify-between mt-2">
                   <span className="text-yellow-400 font-semibold">50 SVT</span>
                   <button
-                    onClick={() => setIsShopOpen(true)}
+                    onClick={onOpenMarketplace}
                     className="bg-gradient-to-r from-green-500 to-teal-500 text-white px-3 py-1 rounded text-sm hover:from-green-600 hover:to-teal-600 transition-all"
                   >
                     Enter Shop
@@ -1577,7 +1999,7 @@ function SafariMartUI({
                 <div className="flex items-center justify-between mt-2">
                   <span className="text-yellow-400 font-semibold">100 SVT</span>
                   <button
-                    onClick={() => setIsShopOpen(true)}
+                    onClick={onOpenMarketplace}
                     className="bg-gradient-to-r from-green-500 to-teal-500 text-white px-3 py-1 rounded text-sm hover:from-green-600 hover:to-teal-600 transition-all"
                   >
                     Enter Shop
@@ -1599,7 +2021,10 @@ function SafariMartUI({
                 <p className="text-sm text-orange-200">
                   Design your own African-inspired artwork
                 </p>
-                <button className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded text-sm mt-2">
+                <button
+                  onClick={onOpenGallery}
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded text-sm mt-2"
+                >
                   Start Creating
                 </button>
               </div>
@@ -1608,7 +2033,10 @@ function SafariMartUI({
                 <p className="text-sm text-orange-200">
                   Showcase your creations to the community
                 </p>
-                <button className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded text-sm mt-2">
+                <button
+                  onClick={onOpenGallery}
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded text-sm mt-2"
+                >
                   Exhibit Now
                 </button>
               </div>
@@ -1655,24 +2083,16 @@ function SafariMartUI({
             </h3>
             <div className="space-y-3">
               <div className="bg-orange-900/40 border border-amber-400/30 rounded-lg p-3">
-                <h4 className="font-semibold text-yellow-100">
-                  Tokenized Assets
-                </h4>
+                <h4 className="font-semibold text-yellow-100">Coming Soon</h4>
                 <p className="text-sm text-orange-200">
-                  Trade digital representations of African culture
+                  Tokenized assets marketplace is under construction.
                 </p>
-                <button className="bg-gradient-to-r from-yellow-500 to-amber-500 text-white px-3 py-1 rounded text-sm mt-2">
-                  View Market
-                </button>
               </div>
               <div className="bg-orange-900/40 border border-amber-400/30 rounded-lg p-3">
                 <h4 className="font-semibold text-yellow-100">Auction House</h4>
                 <p className="text-sm text-orange-200">
-                  Bid on rare cultural artifacts
+                  Coming soon — bid on rare cultural artifacts.
                 </p>
-                <button className="bg-gradient-to-r from-yellow-500 to-amber-500 text-white px-3 py-1 rounded text-sm mt-2">
-                  Join Auction
-                </button>
               </div>
             </div>
           </div>
@@ -1685,26 +2105,18 @@ function SafariMartUI({
             </h3>
             <div className="space-y-3">
               <div className="bg-orange-900/40 border border-amber-400/30 rounded-lg p-3">
-                <h4 className="font-semibold text-yellow-100">
-                  Community Chat
-                </h4>
+                <h4 className="font-semibold text-yellow-100">Coming Soon</h4>
                 <p className="text-sm text-orange-200">
-                  Connect with other African culture enthusiasts
+                  Community chat is on the way.
                 </p>
-                <button className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-1 rounded text-sm mt-2">
-                  Join Chat
-                </button>
               </div>
               <div className="bg-orange-900/40 border border-amber-400/30 rounded-lg p-3">
                 <h4 className="font-semibold text-yellow-100">
                   Cultural Events
                 </h4>
                 <p className="text-sm text-orange-200">
-                  Participate in virtual cultural celebrations
+                  Coming soon — virtual cultural celebrations.
                 </p>
-                <button className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-1 rounded text-sm mt-2">
-                  View Events
-                </button>
               </div>
             </div>
           </div>
@@ -1719,24 +2131,33 @@ function SafariMartScene({
   countryId,
   onMarketplaceClick,
   onArtGalleryClick,
+  onMusicStageClick,
+  controlMode,
 }: {
   countryId: string;
   onMarketplaceClick: () => void;
   onArtGalleryClick: () => void;
+  onMusicStageClick: () => void;
+  controlMode: "firstPerson" | "orbit";
 }) {
   return (
     <>
       <PerspectiveCamera
         makeDefault
-        position={[0, 12, 18]}
-        fov={60}
+        position={[0, 8, 15]}
+        fov={75}
         near={0.1}
         far={1000}
       />
 
+      {/* Conditional Camera Controller */}
+      {controlMode === "firstPerson" && <CameraController />}
+
       {/* Lighting */}
-      <ambientLight intensity={0.8} />
-      <directionalLight position={[10, 15, 5]} intensity={1.0} />
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[10, 15, 5]} intensity={1.2} />
+      <directionalLight position={[-10, 10, -5]} intensity={0.8} />
+      <hemisphereLight args={[0x87ceeb, 0x8fbc8f, 0.4]} />
 
       {/* Ground */}
       <Ground />
@@ -1747,21 +2168,28 @@ function SafariMartScene({
       {/* Cultural Buildings */}
       <AfricanMarketplace onMarketplaceClick={onMarketplaceClick} />
       <AfricanArtGallery onArtGalleryClick={onArtGalleryClick} />
-      <MusicStage />
+      <MusicStage onMusicStageClick={onMusicStageClick} />
       <TradingPost />
       <SocialHub />
 
-      {/* Controls */}
-      <OrbitControls
-        enablePan
-        enableZoom
-        enableRotate
-        minDistance={8}
-        maxDistance={40}
-        target={[0, 0, 0]}
-        enableDamping={true}
-        dampingFactor={0.05}
-      />
+      {/* OrbitControls for orbit mode */}
+      {controlMode === "orbit" && (
+        <OrbitControls
+          enablePan
+          enableZoom
+          enableRotate
+          minDistance={5}
+          maxDistance={50}
+          target={[0, 0, 0]}
+          enableDamping={true}
+          dampingFactor={0.05}
+          mouseButtons={{
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN,
+          }}
+        />
+      )}
     </>
   );
 }
@@ -1771,9 +2199,46 @@ export default function SafariMartPage() {
   const router = useRouter();
   const countryId = params.countryId as string;
   const [isShopOpen, setIsShopOpen] = useState(false);
+  const [controlMode, setControlMode] = useState<"firstPerson" | "orbit">(
+    "firstPerson"
+  );
+  const [isLoadingMarketplace, setIsLoadingMarketplace] = useState(false);
+  const [isLoadingGallery, setIsLoadingGallery] = useState(false);
+  const [isLoadingMusic, setIsLoadingMusic] = useState(false);
+
+  const openMarketplace = () => {
+    setIsLoadingMarketplace(true);
+    // brief delay to show loading state and allow assets to settle
+    setTimeout(() => {
+      setIsLoadingMarketplace(false);
+      setIsShopOpen(true);
+    }, 800);
+  };
+
+  const openGallery = () => {
+    setIsLoadingGallery(true);
+    setTimeout(() => {
+      setIsLoadingGallery(false);
+      router.push(`/artgallery/${countryId}`);
+    }, 800);
+  };
+
+  const openMusic = () => {
+    setIsLoadingMusic(true);
+    setTimeout(() => {
+      setIsLoadingMusic(false);
+      router.push(`/music/${countryId}`);
+    }, 800);
+  };
 
   return (
     <div className="w-full h-screen relative bg-gradient-to-b from-orange-900 via-red-800 to-amber-900">
+      {/* Loading Overlays */}
+      {isLoadingMarketplace && (
+        <LoadingOverlay text="Opening African Marketplace..." />
+      )}
+      {isLoadingGallery && <LoadingOverlay text="Entering Art Gallery..." />}
+      {isLoadingMusic && <LoadingOverlay text="Heading to Music Stage..." />}
       {/* 3D SafariMart Environment */}
       <Canvas
         className="w-full h-full"
@@ -1784,8 +2249,10 @@ export default function SafariMartPage() {
       >
         <SafariMartScene
           countryId={countryId}
-          onMarketplaceClick={() => setIsShopOpen(true)}
-          onArtGalleryClick={() => router.push(`/artgallery/${countryId}`)}
+          onMarketplaceClick={openMarketplace}
+          onArtGalleryClick={openGallery}
+          onMusicStageClick={openMusic}
+          controlMode={controlMode}
         />
       </Canvas>
 
@@ -1795,6 +2262,11 @@ export default function SafariMartPage() {
         isShopOpen={isShopOpen}
         setIsShopOpen={setIsShopOpen}
         onBackToMain={() => router.back()}
+        controlMode={controlMode}
+        setControlMode={setControlMode}
+        onOpenMarketplace={openMarketplace}
+        onOpenGallery={openGallery}
+        onOpenMusic={openMusic}
       />
     </div>
   );

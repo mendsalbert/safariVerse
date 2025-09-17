@@ -23,7 +23,11 @@ import {
   useEffect,
   useMemo,
   MutableRefObject,
+  useCallback,
+  useContext,
+  createContext,
 } from "react";
+import React from "react";
 import { useParams, useRouter } from "next/navigation";
 import * as THREE from "three";
 import {
@@ -90,6 +94,137 @@ interface GameState {
   level: number;
   fruitsCollected: number;
   animalsDefeated: number;
+  gameOver: boolean;
+  invulnerable: boolean; // Temporary invulnerability after collision
+  survivalTime: number; // Time survived in seconds
+}
+
+// Damage animation interface
+interface DamageAnimation {
+  id: string;
+  damage: number;
+  timestamp: number;
+  x: number;
+  y: number;
+}
+
+// Collision detection helper
+function checkCollision(
+  pos1: THREE.Vector3,
+  pos2: THREE.Vector3,
+  radius1: number,
+  radius2: number
+): boolean {
+  const distance = pos1.distanceTo(pos2);
+  return distance < radius1 + radius2;
+}
+
+// Collision object interface
+interface CollisionObject {
+  position: THREE.Vector3;
+  radius: number;
+  damage: number;
+  type: string;
+}
+
+// Create collision context for sharing collision objects
+const CollisionContext = createContext<{
+  collisionObjects: CollisionObject[];
+  addCollisionObject: (obj: CollisionObject) => void;
+  removeCollisionObject: (obj: CollisionObject) => void;
+  clearCollisionObjects: () => void;
+}>({
+  collisionObjects: [],
+  addCollisionObject: () => {},
+  removeCollisionObject: () => {},
+  clearCollisionObjects: () => {},
+});
+
+// Collision provider component with comprehensive object tracking
+function CollisionProvider({ children }: { children: React.ReactNode }) {
+  const [collisionObjects, setCollisionObjects] = useState<CollisionObject[]>(
+    []
+  );
+
+  const addCollisionObject = useCallback((obj: CollisionObject) => {
+    setCollisionObjects((prev) => {
+      // Avoid duplicates by checking position and type
+      const exists = prev.some(
+        (existing) =>
+          existing.position.distanceTo(obj.position) < 0.1 &&
+          existing.type === obj.type
+      );
+      if (exists) return prev;
+      return [...prev, obj];
+    });
+  }, []);
+
+  const removeCollisionObject = useCallback((obj: CollisionObject) => {
+    setCollisionObjects((prev) => prev.filter((o) => o !== obj));
+  }, []);
+
+  // Clear all collision objects
+  const clearCollisionObjects = useCallback(() => {
+    setCollisionObjects([]);
+  }, []);
+
+  return (
+    <CollisionContext.Provider
+      value={{
+        collisionObjects,
+        addCollisionObject,
+        removeCollisionObject,
+        clearCollisionObjects,
+      }}
+    >
+      {children}
+    </CollisionContext.Provider>
+  );
+}
+
+// Collision-aware wrapper component
+function CollisionObject({
+  position,
+  radius,
+  damage,
+  type,
+  children,
+}: {
+  position: [number, number, number];
+  radius: number;
+  damage: number;
+  type: string;
+  children: React.ReactNode;
+}) {
+  const { addCollisionObject, removeCollisionObject } =
+    useContext(CollisionContext);
+  const objRef = useRef<CollisionObject | null>(null);
+
+  useEffect(() => {
+    const collisionObj: CollisionObject = {
+      position: new THREE.Vector3(...position),
+      radius,
+      damage,
+      type,
+    };
+    objRef.current = collisionObj;
+    addCollisionObject(collisionObj);
+
+    return () => {
+      if (objRef.current) {
+        removeCollisionObject(objRef.current);
+      }
+    };
+  }, [
+    position,
+    radius,
+    damage,
+    type,
+    addCollisionObject,
+    removeCollisionObject,
+  ]);
+
+  return <>{children}</>;
 }
 
 // Realistic Avatar component
@@ -584,10 +719,14 @@ function ZebraInstance({
   position,
   rotation,
   scale,
+  collisionRadius = 1.5,
+  collisionDamage = 18,
 }: {
   position: [number, number, number];
   rotation: [number, number, number];
   scale: [number, number, number];
+  collisionRadius?: number;
+  collisionDamage?: number;
 }) {
   const gltf: any = useGLTF("/models/animalss/Zebra.glb");
   const cloned = useMemo(() => {
@@ -604,13 +743,41 @@ function ZebraInstance({
   const prevPosRef = useRef<THREE.Vector3 | null>(null);
   const driftRef = useRef<number>((Math.random() - 0.5) * 0.2);
 
+  // Collision tracking
+  const { addCollisionObject, removeCollisionObject } =
+    useContext(CollisionContext);
+  const collisionObjRef = useRef<CollisionObject | null>(null);
+
   useEffect(() => {
     if (!cloned) return;
     const box = new THREE.Box3().setFromObject(cloned);
     const minY = box.min.y;
     // Position the zebra so its feet are at y=0
     cloned.position.y = -minY;
-  }, [cloned]);
+
+    // Create collision object for this zebra
+    const collisionObj: CollisionObject = {
+      position: new THREE.Vector3(...position),
+      radius: collisionRadius,
+      damage: collisionDamage,
+      type: "animal",
+    };
+    collisionObjRef.current = collisionObj;
+    addCollisionObject(collisionObj);
+
+    return () => {
+      if (collisionObjRef.current) {
+        removeCollisionObject(collisionObjRef.current);
+      }
+    };
+  }, [
+    cloned,
+    position,
+    collisionRadius,
+    collisionDamage,
+    addCollisionObject,
+    removeCollisionObject,
+  ]);
 
   useFrame((_, delta) => {
     const g = groupRef.current;
@@ -634,6 +801,12 @@ function ZebraInstance({
       g.rotation.y = Math.atan2(dx, dz);
     }
     g.position.copy(newPos);
+
+    // Update collision object position
+    if (collisionObjRef.current) {
+      collisionObjRef.current.position.copy(newPos);
+    }
+
     prevPosRef.current = newPos;
   });
 
@@ -696,7 +869,7 @@ function WaterfallInstance({
 
 // TreeTrunkInstance removed per request
 
-// Generic wandering animal (optionally flying)
+// Generic wandering animal (optionally flying) with collision detection
 function AnimalWanderer({
   url,
   position,
@@ -711,6 +884,8 @@ function AnimalWanderer({
   maxAltitude = 6,
   yOffset = 0.18,
   groundOffset = 0.28,
+  collisionRadius = 1.0,
+  collisionDamage = 12,
 }: {
   url: string;
   position: [number, number, number];
@@ -725,6 +900,8 @@ function AnimalWanderer({
   maxAltitude?: number;
   yOffset?: number;
   groundOffset?: number;
+  collisionRadius?: number;
+  collisionDamage?: number;
 }) {
   const gltf: any = useGLTF(url);
   const cloned = useMemo(() => {
@@ -749,6 +926,11 @@ function AnimalWanderer({
   );
   const footClearanceRef = useRef<number>(0.02);
 
+  // Collision tracking
+  const { addCollisionObject, removeCollisionObject } =
+    useContext(CollisionContext);
+  const collisionObjRef = useRef<CollisionObject | null>(null);
+
   useEffect(() => {
     if (!cloned) return;
     const box = new THREE.Box3().setFromObject(cloned);
@@ -765,7 +947,31 @@ function AnimalWanderer({
       0.25 * uniformScale,
       sizeY * uniformScale * 0.18
     );
-  }, [cloned, scale]);
+
+    // Create collision object for this animal
+    const collisionObj: CollisionObject = {
+      position: new THREE.Vector3(...position),
+      radius: collisionRadius,
+      damage: collisionDamage,
+      type: "animal",
+    };
+    collisionObjRef.current = collisionObj;
+    addCollisionObject(collisionObj);
+
+    return () => {
+      if (collisionObjRef.current) {
+        removeCollisionObject(collisionObjRef.current);
+      }
+    };
+  }, [
+    cloned,
+    scale,
+    position,
+    collisionRadius,
+    collisionDamage,
+    addCollisionObject,
+    removeCollisionObject,
+  ]);
 
   useFrame((state, delta) => {
     const g = groupRef.current;
@@ -808,6 +1014,12 @@ function AnimalWanderer({
       const lift = terrainY + epsilon - bottomY;
       g.position.y += lift;
     }
+
+    // Update collision object position
+    if (collisionObjRef.current) {
+      collisionObjRef.current.position.copy(newPos);
+    }
+
     prevPosRef.current = newPos;
   });
 
@@ -831,18 +1043,55 @@ function AnimalWanderer({
 }
 
 // Drivable Humvee player component
-function PlayerHumvee() {
+function PlayerHumvee({
+  onCollision,
+}: {
+  onCollision: (damage: number) => void;
+}) {
   const groupRef = useRef<THREE.Group>(null);
   const velocityRef = useRef<number>(0);
   const steeringRef = useRef<number>(0);
   const keysRef = useRef<{ [k: string]: boolean }>({});
   const { camera } = useThree();
+  const { collisionObjects } = useContext(CollisionContext);
+  const lastCollisionTimeRef = useRef<number>(0);
+  const COLLISION_COOLDOWN = 1000; // 1 second cooldown between collisions
   const camDistanceRef = useRef<number>(1.6);
   // Seamless driving sound (gapless loop) via Web Audio API
   const audioCtxRef = useRef<AudioContext | null>(null);
   const driveBufferRef = useRef<AudioBuffer | null>(null);
   const driveSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
+
+  // Collision sound effect
+  const playCollisionSound = () => {
+    try {
+      const audioCtx = ensureAudioContext();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      // Create crash sound effect
+      oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(
+        50,
+        audioCtx.currentTime + 0.3
+      );
+
+      gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.01,
+        audioCtx.currentTime + 0.3
+      );
+
+      oscillator.start(audioCtx.currentTime);
+      oscillator.stop(audioCtx.currentTime + 0.3);
+    } catch (error) {
+      console.warn("Failed to play collision sound:", error);
+    }
+  };
 
   const ensureAudioContext = () => {
     if (!audioCtxRef.current) {
@@ -973,7 +1222,7 @@ function PlayerHumvee() {
     }
   }, [startPosition]);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     const group = groupRef.current;
     if (!group) return;
 
@@ -985,6 +1234,7 @@ function PlayerHumvee() {
     const STEER_DAMP = 3.0;
 
     const keys = keysRef.current;
+    const currentTime = Date.now();
 
     // Acceleration / braking
     if (keys["w"] || keys["arrowup"]) velocityRef.current += ACCEL * delta;
@@ -1050,6 +1300,59 @@ function PlayerHumvee() {
     group.position.add(forward);
     // Keep grounded
     group.position.y = 0.12;
+
+    // Collision detection with environment objects
+    if (currentTime - lastCollisionTimeRef.current > COLLISION_COOLDOWN) {
+      const playerPos = group.position.clone();
+      const playerRadius = 1.5; // Humvee collision radius
+      const speed = Math.abs(velocityRef.current);
+
+      // Check world boundaries
+      const worldBoundary = 200;
+      if (
+        Math.abs(playerPos.x) > worldBoundary ||
+        Math.abs(playerPos.z) > worldBoundary
+      ) {
+        const damage = Math.min(20, speed * 2);
+        onCollision(damage);
+        lastCollisionTimeRef.current = currentTime;
+        velocityRef.current *= -0.3;
+
+        // Play collision sound
+        playCollisionSound();
+      }
+
+      // Check collisions with all registered objects
+      for (const collision of collisionObjects) {
+        if (
+          checkCollision(
+            playerPos,
+            collision.position,
+            playerRadius,
+            collision.radius
+          )
+        ) {
+          const speedMultiplier = Math.min(2, speed / 5); // Speed affects damage
+          const damage = Math.ceil(collision.damage * speedMultiplier);
+          onCollision(damage);
+          lastCollisionTimeRef.current = currentTime;
+
+          // Bounce back effect based on collision
+          velocityRef.current *= -0.5;
+
+          // Push player away from collision
+          const pushDirection = playerPos
+            .clone()
+            .sub(collision.position)
+            .normalize();
+          group.position.add(pushDirection.multiplyScalar(0.5));
+
+          // Play collision sound
+          playCollisionSound();
+          break; // Only process one collision per frame
+        }
+      }
+    }
 
     // Audio is handled by key handlers for reliable gesture-driven control
 
@@ -1593,8 +1896,12 @@ function ParkEnvironment() {
   );
 }
 
-// Main game component
-function GameScene() {
+// Main game component - memoized to prevent unnecessary re-renders
+const GameScene = React.memo(function GameScene({
+  onCollision,
+}: {
+  onCollision: (damage: number) => void;
+}) {
   // Seeded RNG for stable but rich randomness per load
   const rand = (() => {
     const seedRef = useRef<number>(
@@ -1612,87 +1919,17 @@ function GameScene() {
     }
     return fnRef.current as () => number;
   })();
-  const [gameState, setGameState] = useState<GameState>({
-    score: 0,
-    health: 100,
-    level: 1,
-    fruitsCollected: 0,
-    animalsDefeated: 0,
-  });
 
-  const [avatarPosition, setAvatarPosition] = useState<
-    [number, number, number]
-  >([0, 0, 0]);
-
-  // Generate fruits
-  const fruits = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, i) => ({
-        id: `fruit-${i}`,
-        position: [
-          (Math.random() - 0.5) * 30,
-          0.5,
-          (Math.random() - 0.5) * 30,
-        ] as [number, number, number],
-      })),
-    []
+  // Handle collision damage - use a ref-based approach to avoid dependencies
+  const handleCollision = useCallback(
+    (damage: number) => {
+      // Call the collision handler passed from parent
+      onCollision(damage);
+    },
+    [onCollision]
   );
 
-  // Generate animals
-  const animals = useMemo(
-    () =>
-      Array.from({ length: 6 }, (_, i) => ({
-        id: `animal-${i}`,
-        position: [
-          (Math.random() - 0.5) * 25,
-          0,
-          (Math.random() - 0.5) * 25,
-        ] as [number, number, number],
-      })),
-    []
-  );
-
-  // Handle fruit collection
-  const handleFruitCollect = (fruitId: string) => {
-    setGameState((prev) => ({
-      ...prev,
-      score: prev.score + 10,
-      fruitsCollected: prev.fruitsCollected + 1,
-    }));
-  };
-
-  // Handle animal defeat
-  const handleAnimalDefeat = (animalId: string) => {
-    setGameState((prev) => ({
-      ...prev,
-      score: prev.score + 25,
-      animalsDefeated: prev.animalsDefeated + 1,
-    }));
-  };
-
-  // Keyboard controls
-  useEffect(() => {
-    const handleKeyPress = (event: KeyboardEvent) => {
-      const moveSpeed = 0.5;
-      switch (event.key.toLowerCase()) {
-        case "w":
-          setAvatarPosition((prev) => [prev[0], prev[1], prev[2] - moveSpeed]);
-          break;
-        case "s":
-          setAvatarPosition((prev) => [prev[0], prev[1], prev[2] + moveSpeed]);
-          break;
-        case "a":
-          setAvatarPosition((prev) => [prev[0] - moveSpeed, prev[1], prev[2]]);
-          break;
-        case "d":
-          setAvatarPosition((prev) => [prev[0] + moveSpeed, prev[1], prev[2]]);
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyPress);
-    return () => window.removeEventListener("keydown", handleKeyPress);
-  }, []);
+  // No need for local game state management since it's handled by parent component
 
   return (
     <>
@@ -1757,27 +1994,55 @@ function GameScene() {
         {/* Camp area removed */}
 
         {/* Trees and rocks framing the scene */}
-        <group position={[8, 0, 4]} scale={[1.2, 1.2, 1.2]}>
-          <TreeSavanna />
-        </group>
-        <group position={[12, 0, 2]}>
-          <TreeLarge />
-        </group>
-        <group position={[-10, 0, -2]}>
-          <TreeSavanna />
-        </group>
-        <group position={[-8, 0, -5]}>
-          <Rock />
-        </group>
+        <CollisionObject
+          position={[8, 0, 4]}
+          radius={2.4}
+          damage={18}
+          type="tree"
+        >
+          <group position={[8, 0, 4]} scale={[1.2, 1.2, 1.2]}>
+            <TreeSavanna />
+          </group>
+        </CollisionObject>
+        <CollisionObject
+          position={[12, 0, 2]}
+          radius={2.0}
+          damage={15}
+          type="tree"
+        >
+          <group position={[12, 0, 2]}>
+            <TreeLarge />
+          </group>
+        </CollisionObject>
+        <CollisionObject
+          position={[-10, 0, -2]}
+          radius={2.0}
+          damage={15}
+          type="tree"
+        >
+          <group position={[-10, 0, -2]}>
+            <TreeSavanna />
+          </group>
+        </CollisionObject>
+        <CollisionObject
+          position={[-8, 0, -5]}
+          radius={1.5}
+          damage={10}
+          type="rock"
+        >
+          <group position={[-8, 0, -5]}>
+            <Rock />
+          </group>
+        </CollisionObject>
 
         {/* Desert and road elements removed as requested */}
 
         {/* Procedurally scatter more trees with spacing (focused world) */}
         {(() => {
-          const count = 180;
+          const count = 60; // Reduced from 180 to make game playable
           const range = 400; // focused world area for better density
-          const minDist2 = 8 * 8; // reduced minimum separation for more density
-          const avoidStart = { x: -2, z: 6, r2: 8 * 8 };
+          const minDist2 = 15 * 15; // Increased minimum separation for better spacing
+          const avoidStart = { x: -2, z: 6, r2: 20 * 20 }; // Increased from 8*8
           const positions: Array<[number, number, number, number]> = [];
           let attempts = 0;
           while (positions.length < count && attempts < count * 120) {
@@ -1804,21 +2069,25 @@ function GameScene() {
             positions.push([x, y, z, typePick]);
           }
           return positions.map(([x, y, z, t], i) => (
-            <group
+            <CollisionObject
               key={`tree-scatter-${i}`}
               position={[x, y, z]}
-              scale={[1, 1, 1]}
+              radius={2.0}
+              damage={15}
+              type="tree"
             >
-              {t > 0.45 ? <TreeLarge /> : <TreeSavanna />}
-            </group>
+              <group position={[x, y, z]} scale={[1, 1, 1]}>
+                {t > 0.45 ? <TreeLarge /> : <TreeSavanna />}
+              </group>
+            </CollisionObject>
           ));
         })()}
 
         {/* Near-field ring of trees to densify view around start */}
         {(() => {
-          const ringCount = 45;
-          const innerR = 18;
-          const outerR = 65;
+          const ringCount = 20; // Reduced from 45
+          const innerR = 25; // Increased from 18 to give more space
+          const outerR = 80; // Increased from 65
           const items: any[] = [];
           for (let i = 0; i < ringCount; i++) {
             const r = innerR + Math.random() * (outerR - innerR);
@@ -1827,9 +2096,17 @@ function GameScene() {
             const z = 6 + Math.sin(a) * r;
             const y = getTerrainHeight(x, z);
             items.push(
-              <group key={`near-tree-${i}`} position={[x, y, z]}>
-                {Math.random() > 0.5 ? <TreeLarge /> : <TreeSavanna />}
-              </group>
+              <CollisionObject
+                key={`near-tree-${i}`}
+                position={[x, y, z]}
+                radius={2.0}
+                damage={15}
+                type="tree"
+              >
+                <group position={[x, y, z]}>
+                  {Math.random() > 0.5 ? <TreeLarge /> : <TreeSavanna />}
+                </group>
+              </CollisionObject>
             );
           }
           return items;
@@ -1837,10 +2114,10 @@ function GameScene() {
 
         {/* Scatter GLB tree varieties with spacing (focused world) */}
         {(() => {
-          const count = 200;
+          const count = 80; // Reduced from 200
           const range = 500;
-          const minDist2 = 10 * 10;
-          const avoidStart = { x: -2, z: 6, r2: 10 * 10 };
+          const minDist2 = 20 * 20; // Increased from 10*10
+          const avoidStart = { x: -2, z: 6, r2: 25 * 25 }; // Increased from 10*10
           const positions: Array<{
             x: number;
             y: number;
@@ -1882,19 +2159,29 @@ function GameScene() {
             const rot: [number, number, number] = [0, p.rot, 0];
             const scl: [number, number, number] = [p.s, p.s, p.s];
             return p.pick < 0.5 ? (
-              <BigTreeInstance
+              <CollisionObject
                 key={`bigtree-${i}`}
                 position={pos}
-                rotation={rot}
-                scale={scl}
-              />
+                radius={2.5 * p.s}
+                damage={20}
+                type="tree"
+              >
+                <BigTreeInstance position={pos} rotation={rot} scale={scl} />
+              </CollisionObject>
             ) : (
-              <TwistedTreeInstance
+              <CollisionObject
                 key={`twisted-${i}`}
                 position={pos}
-                rotation={rot}
-                scale={scl}
-              />
+                radius={2.0 * p.s}
+                damage={18}
+                type="tree"
+              >
+                <TwistedTreeInstance
+                  position={pos}
+                  rotation={rot}
+                  scale={scl}
+                />
+              </CollisionObject>
             );
           });
         })()}
@@ -1902,7 +2189,8 @@ function GameScene() {
         {/* Near-field shrubs and rocks for ground detail */}
         {(() => {
           const items: any[] = [];
-          for (let i = 0; i < 80; i++) {
+          for (let i = 0; i < 30; i++) {
+            // Reduced from 80
             const r = 8 + Math.random() * 50;
             const a = Math.random() * Math.PI * 2;
             const x = -2 + Math.cos(a) * r;
@@ -1910,16 +2198,23 @@ function GameScene() {
             const y = getTerrainHeight(x, z);
             if (Math.random() < 0.65) {
               items.push(
-                <ShrubCluster
+                <CollisionObject
                   key={`shrub-${i}`}
                   position={[x, y, z]}
-                  rotation={[0, Math.random() * Math.PI * 2, 0]}
-                  scale={[
-                    0.9 + Math.random() * 0.6,
-                    1,
-                    0.9 + Math.random() * 0.6,
-                  ]}
-                />
+                  radius={0.8}
+                  damage={5}
+                  type="shrub"
+                >
+                  <ShrubCluster
+                    position={[x, y, z]}
+                    rotation={[0, Math.random() * Math.PI * 2, 0]}
+                    scale={[
+                      0.9 + Math.random() * 0.6,
+                      1,
+                      0.9 + Math.random() * 0.6,
+                    ]}
+                  />
+                </CollisionObject>
               );
             } else {
               const s = 0.4 + Math.random() * 0.8;
@@ -1928,13 +2223,20 @@ function GameScene() {
                   ? "/models/rocks/Rock.glb"
                   : "/models/rocks/Rocks.glb";
               items.push(
-                <RockInstance
+                <CollisionObject
                   key={`near-rock-${i}`}
-                  url={url}
                   position={[x, y, z]}
-                  rotation={[0, Math.random() * Math.PI * 2, 0]}
-                  scale={[s, s, s]}
-                />
+                  radius={1.2 * s}
+                  damage={8}
+                  type="rock"
+                >
+                  <RockInstance
+                    url={url}
+                    position={[x, y, z]}
+                    rotation={[0, Math.random() * Math.PI * 2, 0]}
+                    scale={[s, s, s]}
+                  />
+                </CollisionObject>
               );
             }
           }
@@ -1944,7 +2246,7 @@ function GameScene() {
         {/* Grid-based uniform distribution for consistent coverage */}
         {(() => {
           const items: any[] = [];
-          const gridSize = 30;
+          const gridSize = 15; // Reduced from 30 for less density
           const worldSize = 300;
           const step = worldSize / gridSize;
 
@@ -1952,7 +2254,7 @@ function GameScene() {
             for (let z = -worldSize / 2; z < worldSize / 2; z += step) {
               // Skip areas too close to start
               const distFromStart = Math.sqrt((x + 2) ** 2 + (z - 6) ** 2);
-              if (distFromStart < 15) continue;
+              if (distFromStart < 30) continue; // Increased from 15 to give more starting space
 
               // Add some randomness to grid positions
               const offsetX = (Math.random() - 0.5) * step * 0.8;
@@ -1961,20 +2263,27 @@ function GameScene() {
               const finalZ = z + offsetZ;
               const y = getTerrainHeight(finalX, finalZ);
 
-              // Randomly place elements
+              // Randomly place elements (reduced probability for less density)
               const rand = Math.random();
-              if (rand < 0.3) {
+              if (rand < 0.15) {
+                // Reduced from 0.3
                 // Tree
                 const treeType = Math.random() > 0.5 ? "large" : "savanna";
                 items.push(
-                  <group
+                  <CollisionObject
                     key={`grid-tree-${x}-${z}`}
                     position={[finalX, y, finalZ]}
+                    radius={2.0}
+                    damage={15}
+                    type="tree"
                   >
-                    {treeType === "large" ? <TreeLarge /> : <TreeSavanna />}
-                  </group>
+                    <group position={[finalX, y, finalZ]}>
+                      {treeType === "large" ? <TreeLarge /> : <TreeSavanna />}
+                    </group>
+                  </CollisionObject>
                 );
-              } else if (rand < 0.5) {
+              } else if (rand < 0.25) {
+                // Reduced from 0.5
                 // Rock
                 const s = 0.6 + Math.random() * 1.2;
                 const url =
@@ -1982,27 +2291,42 @@ function GameScene() {
                     ? "/models/rocks/Rock.glb"
                     : "/models/rocks/Rocks.glb";
                 items.push(
-                  <RockInstance
+                  <CollisionObject
                     key={`grid-rock-${x}-${z}`}
-                    url={url}
                     position={[finalX, y, finalZ]}
-                    rotation={[0, Math.random() * Math.PI * 2, 0]}
-                    scale={[s, s, s]}
-                  />
+                    radius={1.5 * s}
+                    damage={10}
+                    type="rock"
+                  >
+                    <RockInstance
+                      url={url}
+                      position={[finalX, y, finalZ]}
+                      rotation={[0, Math.random() * Math.PI * 2, 0]}
+                      scale={[s, s, s]}
+                    />
+                  </CollisionObject>
                 );
-              } else if (rand < 0.7) {
+              } else if (rand < 0.35) {
+                // Reduced from 0.7
                 // Shrub
                 items.push(
-                  <ShrubCluster
+                  <CollisionObject
                     key={`grid-shrub-${x}-${z}`}
                     position={[finalX, y, finalZ]}
-                    rotation={[0, Math.random() * Math.PI * 2, 0]}
-                    scale={[
-                      0.8 + Math.random() * 0.8,
-                      1,
-                      0.8 + Math.random() * 0.8,
-                    ]}
-                  />
+                    radius={0.8}
+                    damage={5}
+                    type="shrub"
+                  >
+                    <ShrubCluster
+                      position={[finalX, y, finalZ]}
+                      rotation={[0, Math.random() * Math.PI * 2, 0]}
+                      scale={[
+                        0.8 + Math.random() * 0.8,
+                        1,
+                        0.8 + Math.random() * 0.8,
+                      ]}
+                    />
+                  </CollisionObject>
                 );
               }
             }
@@ -2012,7 +2336,7 @@ function GameScene() {
 
         {/* Zebras near the start with spacing */}
         {(() => {
-          const count = 6;
+          const count = 4; // Reduced from 6
           const minDist2 = 12 * 12;
           const positions: Array<[number, number, number]> = [];
           let attempts = 0;
@@ -2046,6 +2370,8 @@ function GameScene() {
                 (0.2 + Math.random() * 0.05) * 0.6,
                 0.2 + Math.random() * 0.05,
               ]}
+              collisionRadius={1.5}
+              collisionDamage={18}
             />
           ));
         })()}
@@ -2072,7 +2398,8 @@ function GameScene() {
             for (let i = 0; i < n; i++) items.push(factory(i));
           }
           // Elephants: slow, large radius
-          spawn(4, (i) => {
+          spawn(2, (i) => {
+            // Reduced from 4
             const r = 80 + Math.random() * 120;
             const a = Math.random() * Math.PI * 2;
             const x = center.x + Math.cos(a) * r;
@@ -2091,11 +2418,14 @@ function GameScene() {
                 speedMax={0.1}
                 yOffset={0.5}
                 groundOffset={0.5}
+                collisionRadius={2.5}
+                collisionDamage={25}
               />
             );
           });
           // Giraffes: medium, graceful
-          spawn(5, (i) => {
+          spawn(3, (i) => {
+            // Reduced from 5
             const r = 60 + Math.random() * 120;
             const a = Math.random() * Math.PI * 2;
             const x = center.x + Math.cos(a) * r;
@@ -2114,11 +2444,14 @@ function GameScene() {
                 speedMax={0.14}
                 yOffset={1.1}
                 groundOffset={0.8}
+                collisionRadius={2.0}
+                collisionDamage={20}
               />
             );
           });
           // Lions: smaller, faster
-          spawn(6, (i) => {
+          spawn(4, (i) => {
+            // Reduced from 6
             const r = 50 + Math.random() * 120;
             const a = Math.random() * Math.PI * 2;
             const x = center.x + Math.cos(a) * r;
@@ -2136,6 +2469,8 @@ function GameScene() {
                 speedMin={0.14}
                 speedMax={0.22}
                 groundOffset={0.26}
+                collisionRadius={1.8}
+                collisionDamage={30}
               />
             );
           });
@@ -2159,11 +2494,14 @@ function GameScene() {
                 speedMax={0.1}
                 yOffset={0.08}
                 groundOffset={0.2}
+                collisionRadius={2.2}
+                collisionDamage={28}
               />
             );
           });
           // Gazelles: small, quick
-          spawn(8, (i) => {
+          spawn(5, (i) => {
+            // Reduced from 8
             const r = 40 + Math.random() * 140;
             const a = Math.random() * Math.PI * 2;
             const x = center.x + Math.cos(a) * r;
@@ -2182,11 +2520,14 @@ function GameScene() {
                 speedMax={0.28}
                 yOffset={0.32}
                 groundOffset={0.32}
+                collisionRadius={1.2}
+                collisionDamage={15}
               />
             );
           });
           // Birds (ground birds)
-          spawn(10, (i) => {
+          spawn(6, (i) => {
+            // Reduced from 10
             const r = 30 + Math.random() * 160;
             const a = Math.random() * Math.PI * 2;
             const x = center.x + Math.cos(a) * r;
@@ -2204,11 +2545,14 @@ function GameScene() {
                 speedMin={0.2}
                 speedMax={0.3}
                 groundOffset={0.1}
+                collisionRadius={0.5}
+                collisionDamage={8}
               />
             );
           });
           // Hummingbirds (flying)
-          spawn(8, (i) => {
+          spawn(5, (i) => {
+            // Reduced from 8
             const r = 20 + Math.random() * 60;
             const a = Math.random() * Math.PI * 2;
             const x = center.x + Math.cos(a) * r;
@@ -2229,6 +2573,8 @@ function GameScene() {
                 minAltitude={2}
                 maxAltitude={6}
                 groundOffset={0.1}
+                collisionRadius={0.3}
+                collisionDamage={5}
               />
             );
           });
@@ -2236,10 +2582,10 @@ function GameScene() {
         })()}
         {/* Scatter GLB rocks spaced apart (focused world) */}
         {(() => {
-          const count = 180;
+          const count = 60; // Reduced from 180
           const positions: Array<[number, number, number]> = [];
-          const minDist2 = 12 * 12;
-          const avoidStart = { x: -2, z: 6, r2: 10 * 10 };
+          const minDist2 = 18 * 18; // Increased from 12*12
+          const avoidStart = { x: -2, z: 6, r2: 25 * 25 }; // Increased from 10*10
           let attempts = 0;
           while (positions.length < count && attempts < count * 80) {
             attempts++;
@@ -2275,20 +2621,27 @@ function GameScene() {
                 ? "/models/rocks/Rock%20Medium.glb"
                 : "/models/rocks/Rocks.glb";
             return (
-              <RockInstance
+              <CollisionObject
                 key={`rock-${idx}`}
-                url={url}
                 position={pos}
-                rotation={rot}
-                scale={scl}
-              />
+                radius={s * 1.5}
+                damage={12}
+                type="rock"
+              >
+                <RockInstance
+                  url={url}
+                  position={pos}
+                  rotation={rot}
+                  scale={scl}
+                />
+              </CollisionObject>
             );
           });
         })()}
       </group>
 
       {/* Player Humvee */}
-      <PlayerHumvee />
+      <PlayerHumvee onCollision={handleCollision} />
 
       {/* Animals removed */}
 
@@ -2306,7 +2659,7 @@ function GameScene() {
       <ControlsAndHotkeys />
     </>
   );
-}
+});
 
 export default function GamePage() {
   const params = useParams();
@@ -2319,7 +2672,102 @@ export default function GamePage() {
     level: 1,
     fruitsCollected: 0,
     animalsDefeated: 0,
+    gameOver: false,
+    invulnerable: false,
+    survivalTime: 0,
   });
+
+  // Damage animations state
+  const [damageAnimations, setDamageAnimations] = useState<DamageAnimation[]>(
+    []
+  );
+  const [screenShake, setScreenShake] = useState<boolean>(false);
+
+  // Stable refs to prevent Canvas re-renders
+  const gameStateRef = useRef<GameState>(gameState);
+  const setGameStateRef = useRef(setGameState);
+
+  useEffect(() => {
+    gameStateRef.current = gameState;
+    setGameStateRef.current = setGameState;
+  }, [gameState, setGameState]);
+
+  // Survival timer - using refs to prevent Canvas re-renders
+  useEffect(() => {
+    if (!gameState.gameOver) {
+      const timer = setInterval(() => {
+        setGameStateRef.current((prev) => ({
+          ...prev,
+          survivalTime: prev.survivalTime + 1,
+          score: prev.score + 1, // 1 point per second survived
+        }));
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [gameState.gameOver]);
+
+  // Stable collision handler that doesn't cause re-renders
+  const handleCollision = useCallback((damage: number) => {
+    const currentState = gameStateRef.current;
+    if (!currentState.invulnerable && !currentState.gameOver) {
+      const newHealth = Math.max(0, currentState.health - damage);
+
+      setGameStateRef.current((prev) => {
+        const updated = { ...prev, health: newHealth };
+        if (newHealth <= 0) {
+          updated.gameOver = true;
+        }
+        return updated;
+      });
+
+      // Create damage animation
+      const damageAnim: DamageAnimation = {
+        id: `damage-${Date.now()}-${Math.random()}`,
+        damage: damage,
+        timestamp: Date.now(),
+        x: Math.random() * window.innerWidth * 0.6 + window.innerWidth * 0.2, // Center area
+        y: Math.random() * window.innerHeight * 0.4 + window.innerHeight * 0.3, // Center area
+      };
+
+      setDamageAnimations((prev) => [...prev, damageAnim]);
+
+      // Remove animation after 2 seconds
+      setTimeout(() => {
+        setDamageAnimations((prev) =>
+          prev.filter((anim) => anim.id !== damageAnim.id)
+        );
+      }, 2000);
+
+      // Screen shake effect
+      setScreenShake(true);
+      setTimeout(() => {
+        setScreenShake(false);
+      }, 500); // 0.5 second shake
+
+      // Temporary invulnerability after taking damage
+      if (newHealth > 0) {
+        setGameStateRef.current((prev) => ({ ...prev, invulnerable: true }));
+        setTimeout(() => {
+          setGameStateRef.current((prev) => ({ ...prev, invulnerable: false }));
+        }, 2000); // 2 seconds of invulnerability
+      }
+    }
+  }, []);
+
+  // Reset game function
+  const resetGame = useCallback(() => {
+    setGameState({
+      score: 0,
+      health: 100,
+      level: 1,
+      fruitsCollected: 0,
+      animalsDefeated: 0,
+      gameOver: false,
+      invulnerable: false,
+      survivalTime: 0,
+    });
+  }, []);
 
   // Jungle ambience audio
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -2359,134 +2807,354 @@ export default function GamePage() {
   }, [isMuted]);
 
   return (
-    <div className="w-full h-screen relative bg-gradient-to-b from-sky-800 via-sky-600 to-sky-300">
-      {/* Game Header */}
-      <div className="absolute top-0 left-0 right-0 z-10 bg-black/40 backdrop-blur-lg border-b border-green-500/30">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={() => router.push(`/country/${countryId}`)}
-            className="flex items-center gap-2 text-green-100 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" /> Back to Country
-          </button>
-          <h1 className="font-display text-2xl bg-gradient-to-r from-green-200 via-emerald-200 to-teal-200 bg-clip-text text-transparent">
-            Safari Adventure Game
-          </h1>
-          <button
-            onClick={() => setIsMuted((m) => !m)}
-            className="flex items-center gap-2 text-green-100 hover:text-white transition-colors"
-            aria-label={
-              isMuted ? "Unmute jungle ambience" : "Mute jungle ambience"
-            }
-            title={isMuted ? "Unmute jungle ambience" : "Mute jungle ambience"}
-          >
-            {isMuted ? (
-              <VolumeX className="w-5 h-5" />
-            ) : (
-              <Volume2 className="w-5 h-5" />
-            )}
-            <span>{isMuted ? "Sound Off" : "Sound On"}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Game Stats UI */}
-      <div className="absolute top-16 left-4 z-10 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-green-500/30 text-green-100">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Star className="w-4 h-4 text-yellow-400" />
-            <span>Score: {gameState.score}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Heart className="w-4 h-4 text-red-400" />
-            <span>Health: {gameState.health}%</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Apple className="w-4 h-4 text-orange-400" />
-            <span>Fruits: {gameState.fruitsCollected}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-blue-400" />
-            <span>Animals: {gameState.animalsDefeated}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Game Controls */}
-      <div className="absolute bottom-4 left-4 z-10 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-green-500/30 text-green-100">
-        <h3 className="font-semibold mb-2 flex items-center gap-2">
-          <Zap className="w-4 h-4 text-yellow-400" /> Controls
-        </h3>
-        <div className="text-sm space-y-1">
-          <p>
-            <kbd className="bg-green-700/50 px-2 py-1 rounded text-xs">
-              W A S D
-            </kbd>{" "}
-            Drive Humvee
-          </p>
-          <p>
-            <kbd className="bg-green-700/50 px-2 py-1 rounded text-xs">
-              Click
-            </kbd>{" "}
-            Collect Fruits / Interact
-          </p>
-          <p>
-            <kbd className="bg-green-700/50 px-2 py-1 rounded text-xs">
-              Click
-            </kbd>{" "}
-            Fight Animals
-          </p>
-        </div>
-      </div>
-
-      {/* Game Objectives */}
-      <div className="absolute top-16 right-4 z-10 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-green-500/30 text-green-100 max-w-xs">
-        <h3 className="font-semibold mb-2 flex items-center gap-2">
-          <Trophy className="w-4 h-4 text-yellow-400" /> Objectives
-        </h3>
-        <div className="text-sm space-y-1">
-          <p>🍎 Collect fruits (+10 points)</p>
-          <p>🦁 Defeat animals (+25 points)</p>
-          <p>🌟 Reach 500 points to win!</p>
-        </div>
-      </div>
-
-      {/* 3D Game Canvas */}
-      <Canvas shadows className="w-full h-full">
-        <Suspense
-          fallback={
-            <>
-              <ambientLight intensity={0.8} />
-              <PerspectiveCamera makeDefault position={[0, 5, 5]} />
-              <Text
-                position={[0, 0, 0]}
-                fontSize={1.2}
-                color="#e5ffe5"
-                anchorX="center"
-                anchorY="middle"
-              >
-                Loading Safari Adventure...
-              </Text>
-              <Text
-                position={[0, -1, 0]}
-                fontSize={0.6}
-                color="#ccffcc"
-                anchorX="center"
-                anchorY="middle"
-              >
-                Please wait while we load the animals and environment
-              </Text>
-              {/* Simple loading animation */}
-              <mesh position={[0, -2, 0]} rotation={[0, 0, 0]}>
-                <torusGeometry args={[0.5, 0.1, 8, 16]} />
-                <meshBasicMaterial color="#4ade80" />
-              </mesh>
-            </>
+    <>
+      {/* Custom shake animation styles */}
+      <style jsx>{`
+        @keyframes shake {
+          0%,
+          100% {
+            transform: translateX(0) translateY(0);
           }
-        >
-          <GameScene />
-        </Suspense>
-      </Canvas>
-    </div>
+          10% {
+            transform: translateX(-2px) translateY(-1px);
+          }
+          20% {
+            transform: translateX(2px) translateY(1px);
+          }
+          30% {
+            transform: translateX(-3px) translateY(-2px);
+          }
+          40% {
+            transform: translateX(3px) translateY(2px);
+          }
+          50% {
+            transform: translateX(-2px) translateY(-1px);
+          }
+          60% {
+            transform: translateX(2px) translateY(1px);
+          }
+          70% {
+            transform: translateX(-1px) translateY(-2px);
+          }
+          80% {
+            transform: translateX(1px) translateY(2px);
+          }
+          90% {
+            transform: translateX(-1px) translateY(-1px);
+          }
+        }
+        .animate-shake {
+          animation: shake 0.5s ease-in-out;
+        }
+      `}</style>
+      <div
+        className={`w-full h-screen relative bg-gradient-to-b from-sky-800 via-sky-600 to-sky-300 ${
+          screenShake ? "animate-shake" : ""
+        }`}
+      >
+        {/* Game Header */}
+        <div className="absolute top-0 left-0 right-0 z-10 bg-black/40 backdrop-blur-lg border-b border-green-500/30">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <button
+              onClick={() => router.push(`/country/${countryId}`)}
+              className="flex items-center gap-2 text-green-100 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" /> Back to Country
+            </button>
+            <h1 className="font-display text-2xl bg-gradient-to-r from-green-200 via-emerald-200 to-teal-200 bg-clip-text text-transparent">
+              Safari Adventure Game
+            </h1>
+            <button
+              onClick={() => setIsMuted((m) => !m)}
+              className="flex items-center gap-2 text-green-100 hover:text-white transition-colors"
+              aria-label={
+                isMuted ? "Unmute jungle ambience" : "Mute jungle ambience"
+              }
+              title={
+                isMuted ? "Unmute jungle ambience" : "Mute jungle ambience"
+              }
+            >
+              {isMuted ? (
+                <VolumeX className="w-5 h-5" />
+              ) : (
+                <Volume2 className="w-5 h-5" />
+              )}
+              <span>{isMuted ? "Sound Off" : "Sound On"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Game Stats UI */}
+        <div className="absolute top-16 left-4 z-10 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-green-500/30 text-green-100">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Star className="w-4 h-4 text-yellow-400" />
+              <span>Score: {gameState.score}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-blue-400" />
+              <span>
+                Time: {Math.floor(gameState.survivalTime / 60)}:
+                {(gameState.survivalTime % 60).toString().padStart(2, "0")}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Heart
+                className={`w-4 h-4 ${
+                  gameState.health > 30
+                    ? "text-red-400"
+                    : "text-red-600 animate-pulse"
+                }`}
+              />
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span
+                    className={
+                      gameState.health <= 20 ? "text-red-300 font-bold" : ""
+                    }
+                  >
+                    Health: {gameState.health}%
+                  </span>
+                  {gameState.invulnerable && (
+                    <span className="text-blue-300 text-xs animate-pulse">
+                      🛡️ PROTECTED
+                    </span>
+                  )}
+                </div>
+                {/* Safari-themed health bar */}
+                <div className="w-full bg-amber-900/50 rounded-full h-2 border border-amber-600/50 relative overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      gameState.health > 60
+                        ? "bg-gradient-to-r from-green-500 to-green-400"
+                        : gameState.health > 30
+                        ? "bg-gradient-to-r from-yellow-500 to-orange-400"
+                        : "bg-gradient-to-r from-red-600 to-red-500 animate-pulse"
+                    }`}
+                    style={{ width: `${gameState.health}%` }}
+                  />
+                  {/* Safari pattern overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent rounded-full opacity-30"></div>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Apple className="w-4 h-4 text-orange-400" />
+              <span>Fruits: {gameState.fruitsCollected}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-blue-400" />
+              <span>Animals: {gameState.animalsDefeated}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Game Controls */}
+        <div className="absolute bottom-4 left-4 z-10 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-green-500/30 text-green-100">
+          <h3 className="font-semibold mb-2 flex items-center gap-2">
+            <Zap className="w-4 h-4 text-yellow-400" /> Controls
+          </h3>
+          <div className="text-sm space-y-1">
+            <p>
+              <kbd className="bg-green-700/50 px-2 py-1 rounded text-xs">
+                W A S D
+              </kbd>{" "}
+              Drive Humvee
+            </p>
+            <p>
+              <kbd className="bg-green-700/50 px-2 py-1 rounded text-xs">
+                Space
+              </kbd>{" "}
+              Handbrake
+            </p>
+            <p className="text-yellow-300 text-xs">
+              ⚠️ Avoid collisions with trees and rocks!
+            </p>
+            <p className="text-red-300 text-xs">
+              💥 Speed increases collision damage
+            </p>
+          </div>
+        </div>
+
+        {/* Game Objectives */}
+        <div className="absolute top-16 right-4 z-10 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-green-500/30 text-green-100 max-w-xs">
+          <h3 className="font-semibold mb-2 flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-yellow-400" /> Objectives
+          </h3>
+          <div className="text-sm space-y-1">
+            <p>🚗 Survive as long as possible!</p>
+            <p>💥 Avoid trees, rocks, and boundaries</p>
+            <p>❤️ Don't let your health reach 0%</p>
+            <p className="text-yellow-300">
+              🏆 Challenge: How long can you last?
+            </p>
+          </div>
+        </div>
+
+        {/* Game Over Overlay - Safari Themed */}
+        {gameState.gameOver && (
+          <div className="absolute inset-0 z-50 bg-gradient-to-b from-orange-900/80 via-red-900/80 to-yellow-900/80 backdrop-blur-lg flex items-center justify-center">
+            <div className="relative bg-gradient-to-br from-amber-100 via-orange-50 to-yellow-100 border-4 border-amber-600 rounded-2xl p-8 text-center max-w-lg mx-4 shadow-2xl">
+              {/* Safari decorative border */}
+              <div className="absolute -top-2 -left-2 -right-2 -bottom-2 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-600 rounded-2xl -z-10 animate-pulse"></div>
+
+              {/* African pattern decoration */}
+              <div className="absolute top-4 left-4 right-4 h-2 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 opacity-50 rounded-full"></div>
+              <div className="absolute bottom-4 left-4 right-4 h-2 bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 opacity-50 rounded-full"></div>
+
+              {/* Safari icons */}
+              <div className="flex justify-center items-center mb-4 space-x-4">
+                <div className="text-4xl">🦁</div>
+                <div className="text-6xl">⚠️</div>
+                <div className="text-4xl">🐘</div>
+              </div>
+
+              <h2 className="text-4xl font-bold bg-gradient-to-r from-red-700 via-orange-700 to-red-700 bg-clip-text text-transparent mb-4 font-display">
+                SAFARI ENDED!
+              </h2>
+
+              <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 mb-6">
+                <p className="text-amber-800 mb-2 font-semibold">
+                  🚗 Your safari vehicle couldn't survive the wilderness!
+                </p>
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div className="bg-white/70 rounded-lg p-3">
+                    <div className="text-2xl font-bold text-orange-700">
+                      {gameState.score}
+                    </div>
+                    <div className="text-sm text-amber-700">Points</div>
+                  </div>
+                  <div className="bg-white/70 rounded-lg p-3">
+                    <div className="text-2xl font-bold text-orange-700">
+                      {Math.floor(gameState.survivalTime / 60)}:
+                      {(gameState.survivalTime % 60)
+                        .toString()
+                        .padStart(2, "0")}
+                    </div>
+                    <div className="text-sm text-amber-700">Survived</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  onClick={resetGame}
+                  className="w-full px-6 py-4 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl font-bold text-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
+                >
+                  🌍 New Safari Adventure
+                </button>
+                <button
+                  onClick={() => router.push(`/country/${countryId}`)}
+                  className="w-full px-6 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg"
+                >
+                  🗺️ Return to Map
+                </button>
+              </div>
+
+              {/* Achievement badges */}
+              <div className="flex justify-center space-x-2 mt-4">
+                {gameState.survivalTime > 60 && (
+                  <div className="bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full text-xs font-bold">
+                    🏆 Survivor
+                  </div>
+                )}
+                {gameState.score > 100 && (
+                  <div className="bg-orange-400 text-orange-900 px-2 py-1 rounded-full text-xs font-bold">
+                    ⭐ Explorer
+                  </div>
+                )}
+                {gameState.survivalTime > 180 && (
+                  <div className="bg-green-400 text-green-900 px-2 py-1 rounded-full text-xs font-bold">
+                    🦁 Safari Master
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Damage Flash Effect */}
+        {gameState.invulnerable && (
+          <div className="absolute inset-0 z-20 bg-red-500/20 animate-pulse pointer-events-none" />
+        )}
+
+        {/* Damage Animations */}
+        {damageAnimations.map((anim) => {
+          const age = Date.now() - anim.timestamp;
+          const progress = Math.min(age / 2000, 1); // 2 second animation
+          const opacity = Math.max(1 - progress, 0);
+          const yOffset = -progress * 100; // Float upward
+          const scale = 1 + progress * 0.5; // Grow slightly
+
+          return (
+            <div
+              key={anim.id}
+              className="absolute pointer-events-none z-30"
+              style={{
+                left: anim.x,
+                top: anim.y + yOffset,
+                opacity: opacity,
+                transform: `scale(${scale})`,
+                transition: "none",
+              }}
+            >
+              <div className="relative">
+                {/* Damage number with safari styling */}
+                <div className="text-4xl font-bold text-red-600 drop-shadow-lg animate-bounce">
+                  -{anim.damage}
+                </div>
+                {/* Heart icon for health loss */}
+                <div className="absolute -top-2 -right-2 text-red-500 animate-pulse">
+                  💔
+                </div>
+                {/* Glow effect */}
+                <div className="absolute inset-0 text-4xl font-bold text-red-400 blur-sm opacity-50">
+                  -{anim.damage}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* 3D Game Canvas */}
+        <Canvas shadows className="w-full h-full">
+          <Suspense
+            fallback={
+              <>
+                <ambientLight intensity={0.8} />
+                <PerspectiveCamera makeDefault position={[0, 5, 5]} />
+                <Text
+                  position={[0, 0, 0]}
+                  fontSize={1.2}
+                  color="#e5ffe5"
+                  anchorX="center"
+                  anchorY="middle"
+                >
+                  Loading Safari Adventure...
+                </Text>
+                <Text
+                  position={[0, -1, 0]}
+                  fontSize={0.6}
+                  color="#ccffcc"
+                  anchorX="center"
+                  anchorY="middle"
+                >
+                  Please wait while we load the animals and environment
+                </Text>
+                {/* Simple loading animation */}
+                <mesh position={[0, -2, 0]} rotation={[0, 0, 0]}>
+                  <torusGeometry args={[0.5, 0.1, 8, 16]} />
+                  <meshBasicMaterial color="#4ade80" />
+                </mesh>
+              </>
+            }
+          >
+            <CollisionProvider>
+              <GameScene onCollision={handleCollision} />
+            </CollisionProvider>
+          </Suspense>
+        </Canvas>
+      </div>
+    </>
   );
 }

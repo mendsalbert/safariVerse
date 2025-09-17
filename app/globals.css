@@ -234,6 +234,70 @@
     animation: rotate-slow 20s linear infinite;
   }
 
+  /* Pin-specific animations */
+  @keyframes pin-bounce {
+    0%,
+    20%,
+    50%,
+    80%,
+    100% {
+      transform: translateY(0) scale(1);
+    }
+    40% {
+      transform: translateY(-8px) scale(1.05);
+    }
+    60% {
+      transform: translateY(-4px) scale(1.02);
+    }
+  }
+
+  @keyframes pin-glow-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 5px rgba(255, 215, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+    50% {
+      box-shadow: 0 0 15px rgba(255, 215, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3),
+        0 0 25px rgba(255, 215, 0, 0.4);
+    }
+  }
+
+  @keyframes pin-scale-hover {
+    0% {
+      transform: scale(1);
+    }
+    100% {
+      transform: scale(1.1);
+    }
+  }
+
+  @keyframes pin-ripple {
+    0% {
+      transform: scale(0.8);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(2);
+      opacity: 0;
+    }
+  }
+
+  .animate-pin-bounce {
+    animation: pin-bounce 2s ease-in-out infinite;
+  }
+
+  .animate-pin-glow-pulse {
+    animation: pin-glow-pulse 3s ease-in-out infinite;
+  }
+
+  .animate-pin-scale-hover {
+    animation: pin-scale-hover 0.3s ease-out forwards;
+  }
+
+  .animate-pin-ripple {
+    animation: pin-ripple 1s ease-out infinite;
+  }
+
   /* Custom scrollbar */
   .scrollbar-african::-webkit-scrollbar {
     width: 8px;

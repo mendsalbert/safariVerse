@@ -98,19 +98,12 @@ function CountryPin({
     () => latLngToVector3(country.lat, country.lng, radius + 0.001),
     [country, radius]
   );
-  const tangentRotation = useMemo(() => {
-    const normal = pos.clone().normalize();
-    const from = new THREE.Vector3(0, 0, 1); // Html plane faces +Z by default
-    const q = new THREE.Quaternion().setFromUnitVectors(from, normal);
-    const e = new THREE.Euler().setFromQuaternion(q);
-    return [e.x, e.y, e.z] as [number, number, number];
-  }, [pos]);
-  const [hovered, setHovered] = useState(false);
   const router = useRouter();
+  const [hovered, setHovered] = useState(false);
 
   return (
     <group position={pos.toArray()}>
-      <Html distanceFactor={10} center transform rotation={tangentRotation}>
+      <Html distanceFactor={10} center>
         <div
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
@@ -125,31 +118,24 @@ function CountryPin({
           className="flex items-center justify-center cursor-pointer"
           style={{ pointerEvents: "auto" }}
         >
-          <div
-            className="w-5 h-5 flex items-center justify-center rounded-full bg-black/70 border border-white/30"
-            style={{
-              filter: hovered
-                ? `drop-shadow(0 0 8px ${country.color})`
-                : "none",
-              transform: "scale(1)",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <MapPin
-              className="w-4 h-4"
-              style={{ color: hovered ? country.color : "#ffffff" }}
-            />
-          </div>
+          <MapPin className="w-4 h-4" style={{ color: "#ffffff" }} />
         </div>
       </Html>
+
       {hovered && (
-        <Html
-          distanceFactor={10}
-          position={[0, 0.06, 0]}
-          center
-          rotation={tangentRotation}
-        >
-          <div className="bg-black/75 text-white text-xs px-2 py-1 rounded-md border border-amber-500/50 whitespace-nowrap">
+        <Html distanceFactor={10} center position={[0, 0.2, 0]}>
+          <div
+            className="px-2 py-1 rounded-md text-xs text-white bg-black/80 border border-white/20 whitespace-nowrap cursor-pointer"
+            role="button"
+            tabIndex={0}
+            onClick={() => router.push(`/country/${country.id}`)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                router.push(`/country/${country.id}`);
+              }
+            }}
+            style={{ pointerEvents: "auto" }}
+          >
             {country.name}
           </div>
         </Html>
@@ -212,7 +198,7 @@ export default function GlobeAfrica() {
               ×
             </button>
             <h1 className="font-display text-5xl bg-gradient-to-r from-orange-200 via-yellow-200 to-red-200 bg-clip-text text-transparent mb-2">
-              SafariVerse
+              Hedera SafariVerse
             </h1>
             <p className="text-orange-100 text-lg">
               Explore Africa on the world map. Hover pins to identify countries.
@@ -278,7 +264,10 @@ export default function GlobeAfrica() {
             color="#FFD700"
           />
 
-          <Environment preset="sunset" />
+          {/* Replaced failing HDR environment with local-friendly lighting */}
+          <hemisphereLight args={[0xffe0a3, 0x2b1100, 0.9]} />
+          <pointLight position={[0, 3, 6]} intensity={1.0} color="#FFD39A" />
+          <pointLight position={[0, -3, -6]} intensity={0.6} color="#FFA64D" />
 
           <RotatingGlobe />
 
