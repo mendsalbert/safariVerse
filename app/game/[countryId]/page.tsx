@@ -1772,15 +1772,15 @@ function GameScene() {
 
         {/* Desert and road elements removed as requested */}
 
-        {/* Procedurally scatter more trees with spacing (expanded world) */}
+        {/* Procedurally scatter more trees with spacing (focused world) */}
         {(() => {
-          const count = 220;
-          const range = 1600; // expanded world area
-          const minDist2 = 10 * 10; // minimum separation
-          const avoidStart = { x: -2, z: 6, r2: 12 * 12 };
+          const count = 180;
+          const range = 400; // focused world area for better density
+          const minDist2 = 8 * 8; // reduced minimum separation for more density
+          const avoidStart = { x: -2, z: 6, r2: 8 * 8 };
           const positions: Array<[number, number, number, number]> = [];
           let attempts = 0;
-          while (positions.length < count && attempts < count * 80) {
+          while (positions.length < count && attempts < count * 120) {
             attempts++;
             const x = (rand() - 0.5) * (range * 2);
             const z = (rand() - 0.5) * (range * 2);
@@ -1835,12 +1835,12 @@ function GameScene() {
           return items;
         })()}
 
-        {/* Scatter GLB tree varieties with spacing (expanded world) */}
+        {/* Scatter GLB tree varieties with spacing (focused world) */}
         {(() => {
-          const count = 240;
-          const range = 1800;
-          const minDist2 = 12 * 12;
-          const avoidStart = { x: -2, z: 6, r2: 14 * 14 };
+          const count = 200;
+          const range = 500;
+          const minDist2 = 10 * 10;
+          const avoidStart = { x: -2, z: 6, r2: 10 * 10 };
           const positions: Array<{
             x: number;
             y: number;
@@ -1850,7 +1850,7 @@ function GameScene() {
             s: number;
           }> = [];
           let attempts = 0;
-          while (positions.length < count && attempts < count * 100) {
+          while (positions.length < count && attempts < count * 120) {
             attempts++;
             const x = (rand() - 0.5) * (range * 2);
             const z = (rand() - 0.5) * (range * 2);
@@ -1902,8 +1902,8 @@ function GameScene() {
         {/* Near-field shrubs and rocks for ground detail */}
         {(() => {
           const items: any[] = [];
-          for (let i = 0; i < 60; i++) {
-            const r = 10 + Math.random() * 40;
+          for (let i = 0; i < 80; i++) {
+            const r = 8 + Math.random() * 50;
             const a = Math.random() * Math.PI * 2;
             const x = -2 + Math.cos(a) * r;
             const z = 6 + Math.sin(a) * r;
@@ -1936,6 +1936,75 @@ function GameScene() {
                   scale={[s, s, s]}
                 />
               );
+            }
+          }
+          return items;
+        })()}
+
+        {/* Grid-based uniform distribution for consistent coverage */}
+        {(() => {
+          const items: any[] = [];
+          const gridSize = 30;
+          const worldSize = 300;
+          const step = worldSize / gridSize;
+
+          for (let x = -worldSize / 2; x < worldSize / 2; x += step) {
+            for (let z = -worldSize / 2; z < worldSize / 2; z += step) {
+              // Skip areas too close to start
+              const distFromStart = Math.sqrt((x + 2) ** 2 + (z - 6) ** 2);
+              if (distFromStart < 15) continue;
+
+              // Add some randomness to grid positions
+              const offsetX = (Math.random() - 0.5) * step * 0.8;
+              const offsetZ = (Math.random() - 0.5) * step * 0.8;
+              const finalX = x + offsetX;
+              const finalZ = z + offsetZ;
+              const y = getTerrainHeight(finalX, finalZ);
+
+              // Randomly place elements
+              const rand = Math.random();
+              if (rand < 0.3) {
+                // Tree
+                const treeType = Math.random() > 0.5 ? "large" : "savanna";
+                items.push(
+                  <group
+                    key={`grid-tree-${x}-${z}`}
+                    position={[finalX, y, finalZ]}
+                  >
+                    {treeType === "large" ? <TreeLarge /> : <TreeSavanna />}
+                  </group>
+                );
+              } else if (rand < 0.5) {
+                // Rock
+                const s = 0.6 + Math.random() * 1.2;
+                const url =
+                  Math.random() > 0.5
+                    ? "/models/rocks/Rock.glb"
+                    : "/models/rocks/Rocks.glb";
+                items.push(
+                  <RockInstance
+                    key={`grid-rock-${x}-${z}`}
+                    url={url}
+                    position={[finalX, y, finalZ]}
+                    rotation={[0, Math.random() * Math.PI * 2, 0]}
+                    scale={[s, s, s]}
+                  />
+                );
+              } else if (rand < 0.7) {
+                // Shrub
+                items.push(
+                  <ShrubCluster
+                    key={`grid-shrub-${x}-${z}`}
+                    position={[finalX, y, finalZ]}
+                    rotation={[0, Math.random() * Math.PI * 2, 0]}
+                    scale={[
+                      0.8 + Math.random() * 0.8,
+                      1,
+                      0.8 + Math.random() * 0.8,
+                    ]}
+                  />
+                );
+              }
             }
           }
           return items;
@@ -2038,7 +2107,7 @@ function GameScene() {
                 url="/models/animalss/Giraffe.glb"
                 position={[x, y, z]}
                 rotation={[0, Math.random() * Math.PI * 2, 0]}
-                scale={[0.075, 0.075, 0.075]}
+                scale={[0.05, 0.05, 0.05]}
                 radiusMin={18}
                 radiusMax={30}
                 speedMin={0.08}
@@ -2106,7 +2175,7 @@ function GameScene() {
                 url="/models/animalss/Gazelle.glb"
                 position={[x, y, z]}
                 rotation={[0, Math.random() * Math.PI * 2, 0]}
-                scale={[0.035, 0.035, 0.035]}
+                scale={[0.02, 0.02, 0.02]}
                 radiusMin={14}
                 radiusMax={26}
                 speedMin={0.16}
@@ -2129,7 +2198,7 @@ function GameScene() {
                 url="/models/animalss/bird.glb"
                 position={[x, y, z]}
                 rotation={[0, Math.random() * Math.PI * 2, 0]}
-                scale={[0.02, 0.02, 0.02]}
+                scale={[0.01, 0.01, 0.01]}
                 radiusMin={8}
                 radiusMax={16}
                 speedMin={0.2}
@@ -2165,17 +2234,17 @@ function GameScene() {
           });
           return items;
         })()}
-        {/* Scatter GLB rocks spaced apart (expanded world) */}
+        {/* Scatter GLB rocks spaced apart (focused world) */}
         {(() => {
-          const count = 240;
+          const count = 180;
           const positions: Array<[number, number, number]> = [];
-          const minDist2 = 14 * 14;
-          const avoidStart = { x: -2, z: 6, r2: 14 * 14 };
+          const minDist2 = 12 * 12;
+          const avoidStart = { x: -2, z: 6, r2: 10 * 10 };
           let attempts = 0;
-          while (positions.length < count && attempts < count * 50) {
+          while (positions.length < count && attempts < count * 80) {
             attempts++;
-            const x = (rand() - 0.5) * 2000;
-            const z = (rand() - 0.5) * 2000;
+            const x = (rand() - 0.5) * 600;
+            const z = (rand() - 0.5) * 600;
             const y = getTerrainHeight(x, z);
             const dx0 = x - avoidStart.x;
             const dz0 = z - avoidStart.z;

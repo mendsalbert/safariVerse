@@ -11,6 +11,7 @@ import {
   Play,
   X,
   ArrowLeft,
+  ShoppingCart,
 } from "lucide-react";
 
 const factsData: Record<
@@ -545,10 +546,10 @@ export default function CountryPage() {
             </p>
             <p className="mt-3 text-sm text-orange-200">{facts.blurb}</p>
             <button
-              onClick={() => router.push(`/game/${countryId}`)}
-              className="mt-6 inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-teal-500 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-600 hover:to-teal-600 transition-all"
+              onClick={() => router.push(`/safarimart/${countryId}`)}
+              className="mt-6 inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-3 rounded-lg font-semibold hover:from-amber-600 hover:to-orange-600 transition-all"
             >
-              <Play className="w-4 h-4" /> Play Game
+              <ShoppingCart className="w-4 h-4" /> SafariMart
             </button>
           </div>
           <div className="bg-black/40 border border-amber-500/30 rounded-2xl p-6 text-orange-100">

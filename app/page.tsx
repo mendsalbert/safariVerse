@@ -139,6 +139,13 @@ export default function Home() {
         <div className="absolute bottom-6 right-6 z-20 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-amber-500/30 text-orange-100">
           <div className="flex flex-col gap-2 w-48">
             <button
+              onClick={() => router.push("/game/nigeria")}
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 rounded-lg font-medium hover:from-green-600 hover:to-emerald-600 transition-colors shadow-lg flex items-center justify-center gap-2"
+              aria-label="Explore Safari Adventure"
+            >
+              🦁 Explore Safari
+            </button>
+            <button
               onClick={() => router.push("/nft")}
               className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg font-medium hover:from-orange-600 hover:to-amber-600 transition-colors shadow-lg flex items-center justify-center gap-2"
               aria-label="Open Marketplace"
