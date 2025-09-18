@@ -112,6 +112,7 @@ export default function HederaWalletPlayground() {
   const [nftFile, setNftFile] = useState<File | null>(null);
   const [nftName, setNftName] = useState("");
   const [nftDescription, setNftDescription] = useState("");
+  const [autoCollectionCreated, setAutoCollectionCreated] = useState(false);
 
   // Account balance state
   const [accountBalance, setAccountBalance] = useState<string>("");
@@ -124,6 +125,30 @@ export default function HederaWalletPlayground() {
   const [hederaPrivateKey, setHederaPrivateKey] = useState("");
   const [realHederaClient, setRealHederaClient] = useState<any>(null);
   const [isRealAccount, setIsRealAccount] = useState(false);
+  const [parsedPrivateKey, setParsedPrivateKey] = useState<PrivateKey | null>(
+    null
+  );
+  const [saveCredentials, setSaveCredentials] = useState(false);
+
+  // Load saved credentials from localStorage
+  useEffect(() => {
+    const savedAccountId = localStorage.getItem("hedera_account_id");
+    const savedPrivateKey = localStorage.getItem("hedera_private_key");
+    const savedSaveCredentials =
+      localStorage.getItem("hedera_save_credentials") === "true";
+
+    if (savedAccountId && savedPrivateKey && savedSaveCredentials) {
+      setHederaAccountId(savedAccountId);
+      setHederaPrivateKey(savedPrivateKey);
+      setSaveCredentials(true);
+      console.log("📱 Loaded saved Hedera credentials from localStorage");
+
+      // Auto-connect with saved credentials
+      setTimeout(() => {
+        setupRealHederaClient();
+      }, 1000);
+    }
+  }, []);
 
   // Initialize wallets on component mount
   useEffect(() => {
@@ -327,15 +352,34 @@ export default function HederaWalletPlayground() {
 
   // Query account balance with retry logic
   const queryAccountBalance = async (retries = 3) => {
-    if (!currentWallet?.accountId) return;
+    if (!currentWallet?.accountId && !isRealAccount) return;
 
     setBalanceLoading(true);
     try {
-      console.log("🔍 Fetching balance for account:", currentWallet.accountId);
-      const balance = await walletConnector.getAccountBalance();
-      setAccountBalance(balance.hbars);
-      setTokenBalances(balance.tokens);
-      console.log("✅ Balance fetched successfully:", balance.hbars, "HBAR");
+      if (isRealAccount) {
+        // For real accounts, use the real Hedera client
+        const balanceQuery = new AccountBalanceQuery().setAccountId(
+          AccountId.fromString(hederaAccountId)
+        );
+        const balance = await balanceQuery.execute(realHederaClient);
+        setAccountBalance(balance.hbars.toString());
+        setTokenBalances(balance.tokens);
+        console.log(
+          "✅ Real account balance fetched:",
+          balance.hbars.toString(),
+          "HBAR"
+        );
+      } else {
+        // For wallet accounts, use the wallet connector
+        console.log(
+          "🔍 Fetching balance for account:",
+          currentWallet?.accountId
+        );
+        const balance = await walletConnector.getAccountBalance();
+        setAccountBalance(balance.hbars);
+        setTokenBalances(balance.tokens);
+        console.log("✅ Balance fetched successfully:", balance.hbars, "HBAR");
+      }
     } catch (error) {
       console.error("Balance query failed:", error);
 
@@ -357,7 +401,7 @@ export default function HederaWalletPlayground() {
 
   // Create token
   const createToken = async () => {
-    if (!currentWallet) return;
+    if (!currentWallet && !isRealAccount) return;
 
     try {
       setLoading(true);
@@ -367,22 +411,51 @@ export default function HederaWalletPlayground() {
         `Creating token ${tokenName} (${tokenSymbol})`
       );
 
-      const tokenCreateTx = new TokenCreateTransaction()
-        .setTokenName(tokenName)
-        .setTokenSymbol(tokenSymbol)
-        .setTokenType(TokenType.FungibleCommon)
-        .setDecimals(parseInt(tokenDecimals))
-        .setInitialSupply(parseInt(tokenSupply))
-        .setTreasuryAccountId(currentWallet.accountId!)
-        .setSupplyType(TokenSupplyType.Infinite);
+      let txId: string;
+      let isDemoAccount = false;
 
-      const txId = await walletConnector.executeTransaction(tokenCreateTx);
+      if (isRealAccount) {
+        // Use real Hedera client for real accounts
+        if (!parsedPrivateKey) {
+          throw new Error(
+            "Private key not available. Please reconnect your account."
+          );
+        }
 
-      // Generate a demo token ID for demo accounts
-      const isDemoAccount =
-        currentWallet.accountId?.startsWith("0x") ||
-        (currentWallet.accountId?.includes("0.0.") &&
-          parseInt(currentWallet.accountId.split(".")[2]) > 1000000);
+        const tokenCreateTx = new TokenCreateTransaction()
+          .setTokenName(tokenName)
+          .setTokenSymbol(tokenSymbol)
+          .setTokenType(TokenType.FungibleCommon)
+          .setDecimals(parseInt(tokenDecimals))
+          .setInitialSupply(parseInt(tokenSupply))
+          .setTreasuryAccountId(AccountId.fromString(hederaAccountId))
+          .setSupplyType(TokenSupplyType.Infinite);
+
+        const tokenCreateSubmit = await tokenCreateTx.execute(realHederaClient);
+        const tokenCreateRx = await tokenCreateSubmit.getReceipt(
+          realHederaClient
+        );
+        txId = tokenCreateSubmit.transactionId.toString();
+      } else {
+        // Use wallet connector for wallet accounts
+        const tokenCreateTx = new TokenCreateTransaction()
+          .setTokenName(tokenName)
+          .setTokenSymbol(tokenSymbol)
+          .setTokenType(TokenType.FungibleCommon)
+          .setDecimals(parseInt(tokenDecimals))
+          .setInitialSupply(parseInt(tokenSupply))
+          .setTreasuryAccountId(currentWallet!.accountId!)
+          .setSupplyType(TokenSupplyType.Infinite);
+
+        txId = await walletConnector.executeTransaction(tokenCreateTx);
+
+        // Generate a demo token ID for demo accounts
+        isDemoAccount = Boolean(
+          currentWallet!.accountId?.startsWith("0x") ||
+            (currentWallet!.accountId?.includes("0.0.") &&
+              parseInt(currentWallet!.accountId.split(".")[2]) > 1000000)
+        );
+      }
 
       const tokenId = isDemoAccount
         ? `0.0.${Date.now().toString().slice(-6)}`
@@ -423,7 +496,7 @@ export default function HederaWalletPlayground() {
 
   // Upload file
   const uploadFile = async () => {
-    if (!currentWallet || !selectedFile) return;
+    if ((!currentWallet && !isRealAccount) || !selectedFile) return;
 
     try {
       setLoading(true);
@@ -437,17 +510,41 @@ export default function HederaWalletPlayground() {
       const fileBuffer = await selectedFile.arrayBuffer();
       const fileBytes = new Uint8Array(fileBuffer);
 
-      const fileCreateTx = new FileCreateTransaction()
-        .setContents(fileBytes.slice(0, 1024)) // First chunk
-        .setExpirationTime(new Date(Date.now() + 7890000000));
+      let txId: string;
+      let isDemoAccount = false;
 
-      const txId = await walletConnector.executeTransaction(fileCreateTx);
+      if (isRealAccount) {
+        // Use real Hedera client for real accounts
+        if (!parsedPrivateKey) {
+          throw new Error(
+            "Private key not available. Please reconnect your account."
+          );
+        }
 
-      // Generate a demo file ID for demo accounts
-      const isDemoAccount =
-        currentWallet.accountId?.startsWith("0x") ||
-        (currentWallet.accountId?.includes("0.0.") &&
-          parseInt(currentWallet.accountId.split(".")[2]) > 1000000);
+        const fileCreateTx = new FileCreateTransaction()
+          .setContents(fileBytes.slice(0, 1024)) // First chunk
+          .setExpirationTime(new Date(Date.now() + 7890000000));
+
+        const fileCreateSubmit = await fileCreateTx.execute(realHederaClient);
+        const fileCreateRx = await fileCreateSubmit.getReceipt(
+          realHederaClient
+        );
+        txId = fileCreateSubmit.transactionId.toString();
+      } else {
+        // Use wallet connector for wallet accounts
+        const fileCreateTx = new FileCreateTransaction()
+          .setContents(fileBytes.slice(0, 1024)) // First chunk
+          .setExpirationTime(new Date(Date.now() + 7890000000));
+
+        txId = await walletConnector.executeTransaction(fileCreateTx);
+
+        // Generate a demo file ID for demo accounts
+        isDemoAccount = Boolean(
+          currentWallet!.accountId?.startsWith("0x") ||
+            (currentWallet!.accountId?.includes("0.0.") &&
+              parseInt(currentWallet!.accountId.split(".")[2]) > 1000000)
+        );
+      }
 
       const fileId = isDemoAccount
         ? `0.0.${Date.now().toString().slice(-6)}`
@@ -481,11 +578,20 @@ export default function HederaWalletPlayground() {
 
   // Create NFT collection
   const createNFTCollection = async () => {
-    if (!isRealAccount || !realHederaClient) {
+    if (!isRealAccount) {
       addTransaction(
         "nft_create",
         "error",
-        "Please connect your real Hedera account first"
+        "❌ Please connect your real Hedera account first. Demo accounts cannot create real NFT collections."
+      );
+      return;
+    }
+
+    if (!realHederaClient) {
+      addTransaction(
+        "nft_create",
+        "error",
+        "❌ Hedera client not available. Please reconnect your account."
       );
       return;
     }
@@ -501,7 +607,32 @@ export default function HederaWalletPlayground() {
 
       console.log("🚀 Creating real NFT collection...");
 
+      // Use the already parsed private key from setup
+      if (!parsedPrivateKey) {
+        throw new Error(
+          "Private key not available. Please reconnect your account."
+        );
+      }
+
+      // Check account balance to ensure sufficient funds
+      const balanceQuery = new AccountBalanceQuery().setAccountId(
+        AccountId.fromString(hederaAccountId)
+      );
+      const currentBalance = await balanceQuery.execute(realHederaClient);
+      console.log(
+        "💰 Current account balance:",
+        currentBalance.hbars.toString()
+      );
+
+      if (currentBalance.hbars.toTinybars().toNumber() < 2000000000) {
+        // 20 HBAR in tinybars
+        throw new Error(
+          "Insufficient balance. Need at least 20 HBAR to create NFT collection."
+        );
+      }
+
       // Create actual NFT collection on Hedera
+      // Set supply key to the operator's public key for minting NFTs
       const nftCreateTx = new TokenCreateTransaction()
         .setTokenName("SafariVerse NFT Collection")
         .setTokenSymbol("SAFARI")
@@ -510,13 +641,98 @@ export default function HederaWalletPlayground() {
         .setInitialSupply(0)
         .setTreasuryAccountId(AccountId.fromString(hederaAccountId))
         .setSupplyType(TokenSupplyType.Infinite)
-        .setAdminKey(PrivateKey.fromString(hederaPrivateKey))
-        .setSupplyKey(PrivateKey.fromString(hederaPrivateKey))
-        .setMaxTransactionFee(new Hbar(20)); // Set max fee to 20 HBAR
+        .setSupplyKey(parsedPrivateKey.publicKey) // Set supply key to operator's public key
+        .setAdminKey(parsedPrivateKey.publicKey) // Set admin key to operator's public key
+        .setMaxTransactionFee(new Hbar(20)) // Set max fee to 20 HBAR
+        .setTransactionMemo("SafariVerse NFT Collection Creation"); // Add memo for debugging
 
-      const nftCreateSubmit = await nftCreateTx.execute(realHederaClient);
-      const nftCreateRx = await nftCreateSubmit.getReceipt(realHederaClient);
-      const tokenId = nftCreateRx.tokenId?.toString();
+      // Execute with the operator client (no need to freeze or sign manually)
+      console.log("🚀 Creating NFT collection with operator:", {
+        operator: realHederaClient.operatorAccountId?.toString(),
+        operatorKey: parsedPrivateKey.publicKey.toString(),
+        treasuryAccount: hederaAccountId,
+        note: "Operator will automatically become admin and supply key",
+      });
+
+      // Log transaction details for debugging
+      console.log("📋 Transaction details:", {
+        tokenName: "SafariVerse NFT Collection",
+        tokenSymbol: "SAFARI",
+        tokenType: "NonFungibleUnique",
+        treasuryAccountId: hederaAccountId,
+        supplyKey: parsedPrivateKey.publicKey.toString(),
+        adminKey: parsedPrivateKey.publicKey.toString(),
+        maxFee: "20 HBAR",
+      });
+
+      // Debug client state
+      console.log("🔍 Client debug info:", {
+        hasOperator: !!realHederaClient.operatorAccountId,
+        operatorAccountId: realHederaClient.operatorAccountId?.toString(),
+        operatorPublicKey: realHederaClient.operatorPublicKey?.toString(),
+        network: realHederaClient.network?.toString(),
+      });
+
+      // Try to manually sign the transaction if needed
+      console.log("🔐 Attempting to sign transaction manually...");
+      try {
+        // Freeze the transaction first
+        nftCreateTx.freezeWith(realHederaClient);
+        console.log("✅ Transaction frozen successfully");
+
+        // Sign the transaction
+        nftCreateTx.sign(parsedPrivateKey);
+        console.log("✅ Transaction signed successfully");
+      } catch (signError) {
+        console.warn(
+          "⚠️ Manual signing failed, proceeding with client execution:",
+          signError
+        );
+      }
+
+      let nftCreateSubmit, nftCreateRx, tokenId;
+
+      try {
+        console.log("🔄 Attempting transaction execution...");
+        nftCreateSubmit = await nftCreateTx.execute(realHederaClient);
+        console.log("✅ Transaction executed successfully");
+
+        nftCreateRx = await nftCreateSubmit.getReceipt(realHederaClient);
+        console.log("✅ Receipt obtained successfully");
+
+        tokenId = nftCreateRx.tokenId?.toString();
+        console.log("🎯 Token ID:", tokenId);
+      } catch (executionError) {
+        console.error("❌ Transaction execution failed:", executionError);
+
+        // Try alternative approach - create a new client instance
+        console.log("🔄 Trying alternative approach with fresh client...");
+        const freshClient = Client.forTestnet();
+        freshClient.setOperator(
+          AccountId.fromString(hederaAccountId),
+          parsedPrivateKey
+        );
+
+        // Recreate the transaction
+        const altNftCreateTx = new TokenCreateTransaction()
+          .setTokenName("SafariVerse NFT Collection")
+          .setTokenSymbol("SAFARI")
+          .setTokenType(TokenType.NonFungibleUnique)
+          .setDecimals(0)
+          .setInitialSupply(0)
+          .setTreasuryAccountId(AccountId.fromString(hederaAccountId))
+          .setSupplyType(TokenSupplyType.Infinite)
+          .setSupplyKey(parsedPrivateKey.publicKey)
+          .setAdminKey(parsedPrivateKey.publicKey)
+          .setMaxTransactionFee(new Hbar(20))
+          .setTransactionMemo("SafariVerse NFT Collection Creation - Retry");
+
+        nftCreateSubmit = await altNftCreateTx.execute(freshClient);
+        nftCreateRx = await nftCreateSubmit.getReceipt(freshClient);
+        tokenId = nftCreateRx.tokenId?.toString();
+
+        console.log("✅ Alternative approach succeeded:", tokenId);
+      }
 
       if (tokenId) {
         setNftTokenId(tokenId);
@@ -548,8 +764,16 @@ export default function HederaWalletPlayground() {
 
   // Upload file to Hedera File Service
   const uploadFileToHedera = async (file: File): Promise<string> => {
-    if (!realHederaClient || !hederaPrivateKey) {
-      throw new Error("Real Hedera client not available");
+    if (!realHederaClient) {
+      throw new Error(
+        "Hedera client not available. Please reconnect your account."
+      );
+    }
+
+    if (!hederaPrivateKey) {
+      throw new Error(
+        "Private key not available. Please reconnect your account."
+      );
     }
 
     console.log("📁 Uploading file to Hedera File Service:", file.name);
@@ -558,9 +782,15 @@ export default function HederaWalletPlayground() {
     const fileBuffer = await file.arrayBuffer();
     const fileBytes = new Uint8Array(fileBuffer);
 
+    // Use the already parsed private key from setup
+    if (!parsedPrivateKey) {
+      throw new Error(
+        "Private key not available. Please reconnect your account."
+      );
+    }
+
     // Create file on Hedera File Service
     const fileCreateTx = new FileCreateTransaction()
-      .setKeys([PrivateKey.fromString(hederaPrivateKey)])
       .setContents(fileBytes.slice(0, 1024)) // First chunk (max 1KB per transaction)
       .setExpirationTime(new Date(Date.now() + 7890000000)) // ~3 months
       .setMaxTransactionFee(new Hbar(5));
@@ -601,14 +831,62 @@ export default function HederaWalletPlayground() {
       nftMetadata: !!nftMetadata,
     });
 
-    if (!isRealAccount || !realHederaClient || !nftTokenId) {
-      console.log("❌ Missing real Hedera account or token ID");
+    // Enhanced validation with better error messages
+    if (!isRealAccount) {
+      console.log("❌ Not connected to real Hedera account");
       addTransaction(
         "nft_mint",
         "error",
-        "Please connect your real Hedera account and create NFT collection first"
+        "❌ Please connect your real Hedera account first. Demo accounts cannot mint real NFTs."
       );
       return;
+    }
+
+    if (!realHederaClient) {
+      console.log("❌ Hedera client not initialized");
+      addTransaction(
+        "nft_mint",
+        "error",
+        "❌ Hedera client not available. Please reconnect your account."
+      );
+      return;
+    }
+
+    // Auto-create collection if it doesn't exist
+    if (!nftTokenId) {
+      console.log("🔄 No NFT collection found, creating one automatically...");
+      addTransaction(
+        "nft_mint",
+        "pending",
+        "🔄 Creating NFT collection automatically...",
+        "pending"
+      );
+
+      try {
+        await createNFTCollection();
+        if (!nftTokenId) {
+          addTransaction(
+            "nft_mint",
+            "error",
+            "❌ Failed to create NFT collection automatically"
+          );
+          return;
+        }
+        addTransaction(
+          "nft_mint",
+          "success",
+          "✅ NFT collection created automatically",
+          "auto-created"
+        );
+      } catch (error) {
+        console.error("❌ Auto collection creation failed:", error);
+        addTransaction(
+          "nft_mint",
+          "error",
+          "❌ Failed to create NFT collection automatically"
+        );
+        return;
+      }
     }
 
     // Check if we have either a file or manual metadata
@@ -617,7 +895,7 @@ export default function HederaWalletPlayground() {
       addTransaction(
         "nft_mint",
         "error",
-        "Please upload a file or provide metadata"
+        "❌ Please upload a file or provide metadata to create your NFT"
       );
       return;
     }
@@ -724,11 +1002,28 @@ export default function HederaWalletPlayground() {
       }
     } catch (error: any) {
       console.error("NFT minting failed:", error);
-      addTransaction(
-        "nft_mint",
-        "error",
-        `NFT minting failed: ${error.message}`
-      );
+
+      // Provide more specific error messages
+      let errorMessage = "NFT minting failed";
+      if (error.message.includes("INSUFFICIENT_PAYER_BALANCE")) {
+        errorMessage =
+          "❌ Insufficient HBAR balance. Please add more HBAR to your account.";
+      } else if (error.message.includes("INVALID_ACCOUNT_ID")) {
+        errorMessage =
+          "❌ Invalid account ID. Please check your account credentials.";
+      } else if (error.message.includes("INVALID_SIGNATURE")) {
+        errorMessage = "❌ Invalid private key. Please check your private key.";
+      } else if (error.message.includes("TOKEN_HAS_NO_SUPPLY_KEY")) {
+        errorMessage =
+          "❌ NFT collection not properly configured. Please recreate the collection.";
+      } else if (error.message.includes("FILE_NOT_FOUND")) {
+        errorMessage =
+          "❌ File upload failed. Please try uploading the file again.";
+      } else {
+        errorMessage = `❌ NFT minting failed: ${error.message}`;
+      }
+
+      addTransaction("nft_mint", "error", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -748,12 +1043,39 @@ export default function HederaWalletPlayground() {
     try {
       setLoading(true);
 
+      // Validate account ID format
+      if (!/^\d+\.\d+\.\d+$/.test(hederaAccountId)) {
+        throw new Error(
+          "Invalid account ID format. Expected format: 0.0.123456"
+        );
+      }
+
       // Create client for testnet
       const client = Client.forTestnet();
-      client.setOperator(
-        AccountId.fromString(hederaAccountId),
-        PrivateKey.fromString(hederaPrivateKey)
-      );
+
+      // Parse and validate private key
+      let privateKey: PrivateKey;
+      try {
+        // Try different private key formats
+        if (hederaPrivateKey.startsWith("302e020100300506032b657004220420")) {
+          // DER-encoded format
+          privateKey = PrivateKey.fromString(hederaPrivateKey);
+        } else if (hederaPrivateKey.length === 64) {
+          // Raw hex format - convert to DER
+          const derKey = `302e020100300506032b657004220420${hederaPrivateKey}`;
+          privateKey = PrivateKey.fromString(derKey);
+        } else {
+          // Try as-is
+          privateKey = PrivateKey.fromString(hederaPrivateKey);
+        }
+      } catch (keyError) {
+        throw new Error(
+          "Invalid private key format. Please ensure it's in the correct DER-encoded format."
+        );
+      }
+
+      // Set operator with validated credentials
+      client.setOperator(AccountId.fromString(hederaAccountId), privateKey);
 
       // Test the connection by querying account balance
       const balanceQuery = new AccountBalanceQuery().setAccountId(
@@ -763,10 +1085,24 @@ export default function HederaWalletPlayground() {
       const balance = await balanceQuery.execute(client);
 
       setRealHederaClient(client);
+      setParsedPrivateKey(privateKey); // Store the parsed private key
       setIsRealAccount(true);
       setAccountBalance(balance.hbars.toString());
       setTokenBalances(balance.tokens);
       setShowHederaSetup(false);
+
+      // Save credentials to localStorage if user wants to save them
+      if (saveCredentials) {
+        localStorage.setItem("hedera_account_id", hederaAccountId);
+        localStorage.setItem("hedera_private_key", hederaPrivateKey);
+        localStorage.setItem("hedera_save_credentials", "true");
+        console.log("💾 Saved Hedera credentials to localStorage");
+      } else {
+        // Clear saved credentials if user doesn't want to save
+        localStorage.removeItem("hedera_account_id");
+        localStorage.removeItem("hedera_private_key");
+        localStorage.removeItem("hedera_save_credentials");
+      }
 
       addTransaction(
         "hedera_setup",
@@ -781,11 +1117,22 @@ export default function HederaWalletPlayground() {
       });
     } catch (error: any) {
       console.error("Failed to setup Hedera client:", error);
-      addTransaction(
-        "hedera_setup",
-        "error",
-        `Failed to connect: ${error.message}`
-      );
+
+      let errorMessage = "Failed to connect";
+      if (error.message.includes("INVALID_ACCOUNT_ID")) {
+        errorMessage =
+          "❌ Invalid Account ID format. Please check your account ID.";
+      } else if (error.message.includes("INVALID_SIGNATURE")) {
+        errorMessage =
+          "❌ Invalid Private Key. Please check your private key format.";
+      } else if (error.message.includes("INSUFFICIENT_PAYER_BALANCE")) {
+        errorMessage =
+          "❌ Insufficient HBAR balance. Please add HBAR to your account.";
+      } else {
+        errorMessage = `❌ Failed to connect: ${error.message}`;
+      }
+
+      addTransaction("hedera_setup", "error", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -1012,6 +1359,48 @@ export default function HederaWalletPlayground() {
                         </p>
                       </div>
 
+                      <div className="bg-blue-500/20 border border-blue-500/30 rounded p-3">
+                        <p className="text-blue-300 text-sm font-medium mb-2">
+                          🔑 Private Key Format Help:
+                        </p>
+                        <div className="text-blue-200 text-xs space-y-1">
+                          <p>
+                            • <strong>DER format:</strong>{" "}
+                            302e020100300506032b657004220420...
+                          </p>
+                          <p>
+                            • <strong>Raw hex:</strong> 64-character hex string
+                          </p>
+                          <p>
+                            • <strong>From portal.hedera.com:</strong> Copy the
+                            full private key
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Save Credentials Checkbox */}
+                      <div className="bg-green-500/20 border border-green-500/30 rounded p-3">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={saveCredentials}
+                            onChange={(e) =>
+                              setSaveCredentials(e.target.checked)
+                            }
+                            className="w-4 h-4 text-green-600 bg-white border-gray-300 rounded focus:ring-green-500 focus:ring-2"
+                          />
+                          <div>
+                            <p className="text-green-300 text-sm font-medium">
+                              💾 Save Credentials
+                            </p>
+                            <p className="text-green-200 text-xs">
+                              Remember my Account ID and Private Key for next
+                              time
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+
                       <div className="flex gap-3">
                         <button
                           onClick={setupRealHederaClient}
@@ -1055,9 +1444,15 @@ export default function HederaWalletPlayground() {
                     onClick={() => {
                       setIsRealAccount(false);
                       setRealHederaClient(null);
+                      setParsedPrivateKey(null);
                       setHederaAccountId("");
                       setHederaPrivateKey("");
                       setNftTokenId("");
+                      setSaveCredentials(false);
+                      // Clear saved credentials from localStorage
+                      localStorage.removeItem("hedera_account_id");
+                      localStorage.removeItem("hedera_private_key");
+                      localStorage.removeItem("hedera_save_credentials");
                     }}
                     className="text-red-400 hover:text-red-300 text-sm"
                   >
@@ -1148,7 +1543,7 @@ export default function HederaWalletPlayground() {
           <div className="space-y-6">
             <AccountStatusNotification />
 
-            {!currentWallet ? (
+            {!currentWallet && !isRealAccount ? (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 text-center">
                 <Wallet className="w-16 h-16 text-white/50 mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-white mb-2">
@@ -1272,7 +1667,7 @@ export default function HederaWalletPlayground() {
       case "tokens":
         return (
           <div className="space-y-6">
-            {!currentWallet ? (
+            {!currentWallet && !isRealAccount ? (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 text-center">
                 <Coins className="w-16 h-16 text-white/50 mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-white mb-2">
@@ -1350,7 +1745,7 @@ export default function HederaWalletPlayground() {
                     onClick={createToken}
                     disabled={
                       loading ||
-                      !currentWallet ||
+                      (!currentWallet && !isRealAccount) ||
                       !tokenName ||
                       !tokenSymbol ||
                       !tokenSupply
@@ -1411,7 +1806,7 @@ export default function HederaWalletPlayground() {
       case "files":
         return (
           <div className="space-y-6">
-            {!currentWallet ? (
+            {!currentWallet && !isRealAccount ? (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 text-center">
                 <FileText className="w-16 h-16 text-white/50 mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-white mb-2">
@@ -1477,7 +1872,11 @@ export default function HederaWalletPlayground() {
                     </div>
                     <button
                       onClick={uploadFile}
-                      disabled={loading || !currentWallet || !selectedFile}
+                      disabled={
+                        loading ||
+                        (!currentWallet && !isRealAccount) ||
+                        !selectedFile
+                      }
                       className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 text-white p-3 rounded-lg font-semibold flex items-center justify-center gap-2"
                     >
                       {loading ? (
@@ -1497,7 +1896,7 @@ export default function HederaWalletPlayground() {
       case "nfts":
         return (
           <div className="space-y-6">
-            {!currentWallet ? (
+            {!currentWallet && !isRealAccount ? (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 text-center">
                 <Upload className="w-16 h-16 text-white/50 mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-white mb-2">
@@ -1545,52 +1944,168 @@ export default function HederaWalletPlayground() {
               </div>
             ) : (
               <>
-                {/* Debug Info */}
+                {/* Status Overview */}
                 <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-4">
-                  <h4 className="text-blue-300 font-semibold mb-2 flex items-center gap-2">
+                  <h4 className="text-blue-300 font-semibold mb-3 flex items-center gap-2">
                     <Eye className="w-4 h-4" />
-                    Debug Information
+                    NFT Creation Status
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-blue-200">
-                        <span className="font-medium">Account Mode:</span>{" "}
-                        {isRealAccount ? "🔐 Real Hedera" : "🎭 Demo"}
-                      </p>
-                      <p className="text-blue-200">
-                        <span className="font-medium">NFT Token ID:</span>{" "}
-                        {nftTokenId || "None"}
-                      </p>
-                      <p className="text-blue-200">
-                        <span className="font-medium">Minted NFTs:</span>{" "}
-                        {mintedNFTs.length}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-blue-200">
-                        <span className="font-medium">Selected File:</span>{" "}
-                        {nftFile?.name || "None"}
-                      </p>
-                      <p className="text-blue-200">
-                        <span className="font-medium">Has Metadata:</span>{" "}
-                        {nftMetadata ? "Yes" : "No"}
-                      </p>
-                      {isRealAccount && (
-                        <p className="text-green-300">
-                          <span className="font-medium">Balance:</span>{" "}
-                          {accountBalance} HBAR
+
+                  {/* Step-by-step status */}
+                  <div className="space-y-3">
+                    {/* Step 1: Account Connection */}
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          isRealAccount
+                            ? "bg-green-500 text-white"
+                            : "bg-red-500 text-white"
+                        }`}
+                      >
+                        {isRealAccount ? "✓" : "1"}
+                      </div>
+                      <div className="flex-1">
+                        <p
+                          className={`text-sm font-medium ${
+                            isRealAccount ? "text-green-300" : "text-red-300"
+                          }`}
+                        >
+                          {isRealAccount
+                            ? "Real Hedera Account Connected"
+                            : "Connect Real Hedera Account"}
                         </p>
-                      )}
+                        <p className="text-xs text-blue-200">
+                          {isRealAccount
+                            ? `Account: ${hederaAccountId}`
+                            : "Required for real NFT creation"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 2: NFT Collection */}
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          nftTokenId
+                            ? "bg-green-500 text-white"
+                            : "bg-yellow-500 text-white"
+                        }`}
+                      >
+                        {nftTokenId ? "✓" : "2"}
+                      </div>
+                      <div className="flex-1">
+                        <p
+                          className={`text-sm font-medium ${
+                            nftTokenId ? "text-green-300" : "text-yellow-300"
+                          }`}
+                        >
+                          {nftTokenId
+                            ? "NFT Collection Created"
+                            : "Create NFT Collection"}
+                        </p>
+                        <p className="text-xs text-blue-200">
+                          {nftTokenId
+                            ? `Token ID: ${nftTokenId}`
+                            : "Required before minting NFTs (~20 HBAR)"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step 3: File Upload */}
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          nftFile
+                            ? "bg-green-500 text-white"
+                            : "bg-gray-500 text-white"
+                        }`}
+                      >
+                        {nftFile ? "✓" : "3"}
+                      </div>
+                      <div className="flex-1">
+                        <p
+                          className={`text-sm font-medium ${
+                            nftFile ? "text-green-300" : "text-gray-300"
+                          }`}
+                        >
+                          {nftFile ? "File Selected" : "Select NFT Media"}
+                        </p>
+                        <p className="text-xs text-blue-200">
+                          {nftFile
+                            ? `${nftFile.name} (${(nftFile.size / 1024).toFixed(
+                                2
+                              )} KB)`
+                            : "Upload image, video, or audio file"}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  {mintedNFTs.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-blue-400/30">
-                      <p className="text-blue-200 text-sm">
-                        ✅ {mintedNFTs.length} NFT(s) created in local state -
-                        they should appear below!
-                      </p>
+
+                  {/* Current Status Summary */}
+                  <div className="mt-4 pt-3 border-t border-blue-400/30">
+                    <div className="flex items-center justify-between">
+                      <span className="text-blue-200 text-sm">
+                        Ready to mint:{" "}
+                        {isRealAccount && nftTokenId && nftFile
+                          ? "✅ Yes"
+                          : "❌ No"}
+                      </span>
+                      <span className="text-blue-200 text-sm">
+                        Minted NFTs: {mintedNFTs.length}
+                      </span>
                     </div>
-                  )}
+                  </div>
+                </div>
+
+                {/* Help Guide */}
+                <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-4">
+                  <h4 className="text-green-300 font-semibold mb-3 flex items-center gap-2">
+                    <Shield className="w-4 h-4" />
+                    How to Create NFTs
+                  </h4>
+                  <div className="space-y-2 text-sm text-green-200">
+                    <div className="flex items-start gap-2">
+                      <span className="text-green-400 font-bold">1.</span>
+                      <span>
+                        Connect your real Hedera account (not demo) using
+                        Account ID and Private Key
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-green-400 font-bold">2.</span>
+                      <span>
+                        Create an NFT collection first (~20 HBAR cost) - this is
+                        required before minting
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-green-400 font-bold">3.</span>
+                      <span>
+                        Upload your media file (image, video, audio) or provide
+                        metadata
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-green-400 font-bold">4.</span>
+                      <span>
+                        Click "Mint NFT" to create your unique NFT on Hedera
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-green-400/30">
+                    <p className="text-green-200 text-xs">
+                      💡 <strong>Need help?</strong> Get a testnet account at{" "}
+                      <a
+                        href="https://portal.hedera.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-green-100"
+                      >
+                        portal.hedera.com
+                      </a>{" "}
+                      and use the faucet to get free testnet HBAR.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Demo Account Notice for NFTs */}
@@ -1629,34 +2144,8 @@ export default function HederaWalletPlayground() {
                     NFT Operations
                   </h3>
                   <div className="space-y-4">
-                    {/* Collection Status */}
-                    {!nftTokenId ? (
-                      <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse"></div>
-                          <div>
-                            <h4 className="text-blue-300 font-semibold">
-                              Collection Required
-                            </h4>
-                            <p className="text-blue-200 text-sm">
-                              Create your NFT collection first (~20 HBAR cost)
-                            </p>
-                          </div>
-                          <button
-                            onClick={createNFTCollection}
-                            disabled={loading || !currentWallet}
-                            className="ml-auto bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-500 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2"
-                          >
-                            {loading ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Coins className="w-4 h-4" />
-                            )}
-                            Create Collection
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
+                    {/* Auto Collection Status */}
+                    {nftTokenId && (
                       <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-4">
                         <div className="flex items-center gap-3">
                           <CheckCircle className="w-5 h-5 text-green-400" />
@@ -1801,7 +2290,7 @@ export default function HederaWalletPlayground() {
                           onClick={mintNFT}
                           disabled={
                             loading ||
-                            !currentWallet ||
+                            (!currentWallet && !isRealAccount) ||
                             (!nftFile && !nftMetadata)
                           }
                           className="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 disabled:from-gray-500 disabled:to-gray-600 text-white p-4 rounded-lg font-bold text-lg flex items-center justify-center gap-3 transition-all"
@@ -1811,21 +2300,12 @@ export default function HederaWalletPlayground() {
                           ) : (
                             <Send className="w-5 h-5" />
                           )}
-                          {!nftTokenId
-                            ? "Create Collection First"
-                            : "🎨 Mint NFT"}
+                          🎨 Mint NFT
                         </button>
 
                         {!nftFile && !nftMetadata && (
                           <p className="text-white/50 text-sm text-center mt-2">
                             Please upload a file or provide metadata to continue
-                          </p>
-                        )}
-
-                        {!nftTokenId && (
-                          <p className="text-yellow-300 text-sm text-center mt-2">
-                            ⚠️ Create your NFT collection first using the button
-                            above
                           </p>
                         )}
                       </div>
@@ -2010,7 +2490,7 @@ export default function HederaWalletPlayground() {
       case "transactions":
         return (
           <div className="space-y-6">
-            {!currentWallet ? (
+            {!currentWallet && !isRealAccount ? (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 text-center">
                 <Settings className="w-16 h-16 text-white/50 mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-white mb-2">
