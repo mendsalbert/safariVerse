@@ -8,7 +8,7 @@ import CountryExplorer from "./components/CountryExplorer";
 import LocationChat from "./components/LocationChat";
 import Marketplace from "./components/Marketplace";
 import SocialHub from "./components/SocialHub";
-import { Compass, Gem, Globe2, Image as ImageIcon } from "lucide-react";
+import { Compass, Gem, Globe2, Image as ImageIcon, Coins } from "lucide-react";
 
 interface Country {
   id: string;
@@ -170,6 +170,14 @@ export default function Home() {
             >
               <ImageIcon className="w-5 h-5" />
               Safari Gallery
+            </button>
+            <button
+              onClick={() => router.push("/hedera")}
+              className="w-full bg-gradient-to-r from-teal-500 to-cyan-500 text-white px-4 py-2 rounded-lg font-medium hover:from-teal-600 hover:to-cyan-600 transition-colors shadow-lg flex items-center justify-center gap-2"
+              aria-label="Open Hedera Playground"
+            >
+              <Coins className="w-5 h-5" />
+              Hedera SDK
             </button>
           </div>
         </div>
