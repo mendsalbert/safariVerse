@@ -741,7 +741,7 @@ function TradingPost() {
   );
 }
 
-function SocialHub() {
+function SocialHub({ onSocialHubClick }: { onSocialHubClick: () => void }) {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
 
@@ -754,42 +754,57 @@ function SocialHub() {
 
   return (
     <group ref={groupRef} position={[0, 0, -25]}>
-      {/* Social Hub Building */}
+      {/* Social Hub Building - Enhanced */}
       <mesh position={[0, 2, 0]}>
-        <boxGeometry args={[8, 4, 6]} />
+        <boxGeometry args={[10, 4, 8]} />
         <meshStandardMaterial color="#F0E68C" roughness={0.6} />
       </mesh>
 
       {/* Roof */}
       <mesh position={[0, 4.5, 0]}>
-        <boxGeometry args={[9, 1, 7]} />
+        <boxGeometry args={[11, 1, 9]} />
         <meshStandardMaterial color="#8B4513" roughness={0.8} />
       </mesh>
 
-      {/* Seating Areas */}
-      {Array.from({ length: 6 }, (_, i) => {
-        const angle = (i / 6) * Math.PI * 2;
-        const x = Math.cos(angle) * 3;
-        const z = Math.sin(angle) * 3;
+      {/* Community Circle */}
+      <mesh position={[0, 0.1, 0]}>
+        <cylinderGeometry args={[6, 6, 0.2, 32]} />
+        <meshStandardMaterial color="#4ade80" roughness={0.8} />
+      </mesh>
+
+      {/* Seating Areas - More seats for community */}
+      {Array.from({ length: 8 }, (_, i) => {
+        const angle = (i / 8) * Math.PI * 2;
+        const x = Math.cos(angle) * 4;
+        const z = Math.sin(angle) * 4;
         return (
           <group key={i} position={[x, 0.3, z]} rotation={[0, angle, 0]}>
             <mesh>
-              <boxGeometry args={[1, 0.6, 0.8]} />
+              <boxGeometry args={[1.2, 0.6, 0.8]} />
               <meshStandardMaterial color="#8B4513" roughness={0.8} />
             </mesh>
           </group>
         );
       })}
 
-      {/* Central Table */}
-      <mesh position={[0, 0.8, 0]}>
-        <cylinderGeometry args={[1.5, 1.5, 0.1, 16]} />
-        <meshStandardMaterial color="#8B4513" roughness={0.8} />
+      {/* Central Community Fire */}
+      <Float speed={2} rotationIntensity={0.3} floatIntensity={0.2}>
+        <mesh position={[0, 1, 0]}>
+          <sphereGeometry args={[0.6, 16, 16]} />
+          <meshBasicMaterial color="#ff6b35" transparent opacity={0.7} />
+        </mesh>
+      </Float>
+
+      {/* Welcome Banner */}
+      <mesh position={[0, 3, 4.5]} rotation={[0, 0, 0]}>
+        <boxGeometry args={[6, 1, 0.1]} />
+        <meshStandardMaterial color="#059669" roughness={0.5} />
       </mesh>
 
       {/* Clickable Area for Social Hub */}
       <mesh
         position={[0, 2, 0]}
+        onClick={onSocialHubClick}
         onPointerOver={(e) => {
           setHovered(true);
           e.stopPropagation();
@@ -800,7 +815,7 @@ function SocialHub() {
           document.body.style.cursor = "auto";
         }}
       >
-        <boxGeometry args={[8, 4, 6]} />
+        <boxGeometry args={[10, 4, 8]} />
         <meshBasicMaterial
           color={hovered ? "#FFD700" : "#F0E68C"}
           transparent
@@ -1820,6 +1835,7 @@ function SafariMartUI({
   onOpenGallery: () => void;
   onOpenMusic: () => void;
 }) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<
     "marketplace" | "gallery" | "music" | "trading" | "social"
   >("marketplace");
@@ -2105,18 +2121,32 @@ function SafariMartUI({
             </h3>
             <div className="space-y-3">
               <div className="bg-orange-900/40 border border-amber-400/30 rounded-lg p-3">
-                <h4 className="font-semibold text-yellow-100">Coming Soon</h4>
+                <h4 className="font-semibold text-yellow-100">
+                  Community Chat
+                </h4>
                 <p className="text-sm text-orange-200">
-                  Community chat is on the way.
+                  Connect with fellow safari adventurers
                 </p>
+                <button
+                  onClick={() => router.push("/socialhub")}
+                  className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-1 rounded text-sm mt-2 hover:from-blue-600 hover:to-cyan-600 transition-all"
+                >
+                  Join Community
+                </button>
               </div>
               <div className="bg-orange-900/40 border border-amber-400/30 rounded-lg p-3">
                 <h4 className="font-semibold text-yellow-100">
-                  Cultural Events
+                  Interactive Activities
                 </h4>
                 <p className="text-sm text-orange-200">
-                  Coming soon — virtual cultural celebrations.
+                  Mini games, events, and social features
                 </p>
+                <button
+                  onClick={() => router.push("/socialhub")}
+                  className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-1 rounded text-sm mt-2 hover:from-blue-600 hover:to-cyan-600 transition-all"
+                >
+                  Explore Hub
+                </button>
               </div>
             </div>
           </div>
@@ -2140,6 +2170,7 @@ function SafariMartScene({
   onMusicStageClick: () => void;
   controlMode: "firstPerson" | "orbit";
 }) {
+  const router = useRouter();
   return (
     <>
       <PerspectiveCamera
@@ -2170,7 +2201,7 @@ function SafariMartScene({
       <AfricanArtGallery onArtGalleryClick={onArtGalleryClick} />
       <MusicStage onMusicStageClick={onMusicStageClick} />
       <TradingPost />
-      <SocialHub />
+      <SocialHub onSocialHubClick={() => router.push("/socialhub")} />
 
       {/* OrbitControls for orbit mode */}
       {controlMode === "orbit" && (

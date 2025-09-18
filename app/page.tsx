@@ -8,6 +8,7 @@ import CountryExplorer from "./components/CountryExplorer";
 import LocationChat from "./components/LocationChat";
 import Marketplace from "./components/Marketplace";
 import SocialHub from "./components/SocialHub";
+import { Compass, Gem, Globe2, Image as ImageIcon } from "lucide-react";
 
 interface Country {
   id: string;
@@ -143,13 +144,15 @@ export default function Home() {
               className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 rounded-lg font-medium hover:from-green-600 hover:to-emerald-600 transition-colors shadow-lg flex items-center justify-center gap-2"
               aria-label="Explore Safari Adventure"
             >
-              🦁 Explore Safari
+              <Compass className="w-5 h-5" />
+              Explore Safari
             </button>
             <button
               onClick={() => router.push("/nft")}
               className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg font-medium hover:from-orange-600 hover:to-amber-600 transition-colors shadow-lg flex items-center justify-center gap-2"
               aria-label="Open Marketplace"
             >
+              <Gem className="w-5 h-5" />
               Marketplace NFT
             </button>
             <button
@@ -157,7 +160,16 @@ export default function Home() {
               className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg font-medium hover:from-orange-600 hover:to-amber-600 transition-colors shadow-lg flex items-center justify-center gap-2"
               aria-label="Open Global Social"
             >
+              <Globe2 className="w-5 h-5" />
               Global Social
+            </button>
+            <button
+              onClick={() => router.push("/gallery")}
+              className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-4 py-2 rounded-lg font-medium hover:from-indigo-600 hover:to-purple-600 transition-colors shadow-lg flex items-center justify-center gap-2"
+              aria-label="Open Safari Gallery"
+            >
+              <ImageIcon className="w-5 h-5" />
+              Safari Gallery
             </button>
           </div>
         </div>
