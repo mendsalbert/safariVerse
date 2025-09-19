@@ -22,6 +22,12 @@ contract SafariVerseNFT is ERC721URIStorage, Ownable {
     // minter => tokenIds minted by that address
     mapping(address => uint256[]) private _mintedBy;
 
+    // tokenId => ownership history (ordered). First entry is initial owner at mint
+    mapping(uint256 => address[]) private _ownershipHistory;
+
+    event OwnershipHistoryUpdated(uint256 indexed tokenId, address indexed owner);
+    event Collected(address indexed user, uint256 indexed tokenId);
+
     event Minted(
         uint256 indexed tokenId,
         address indexed minter,
@@ -64,6 +70,10 @@ contract SafariVerseNFT is ERC721URIStorage, Ownable {
 
         _mintedBy[msg.sender].push(tokenId);
 
+        // record history
+        _ownershipHistory[tokenId].push(msg.sender);
+        emit OwnershipHistoryUpdated(tokenId, msg.sender);
+
         emit Minted(tokenId, msg.sender, fileUrl, title, price);
     }
 
@@ -90,6 +100,9 @@ contract SafariVerseNFT is ERC721URIStorage, Ownable {
 
         _mintedBy[to].push(tokenId);
 
+        _ownershipHistory[tokenId].push(to);
+        emit OwnershipHistoryUpdated(tokenId, to);
+
         emit Minted(tokenId, to, fileUrl, title, price);
     }
 
@@ -113,6 +126,32 @@ contract SafariVerseNFT is ERC721URIStorage, Ownable {
 
     function tokensMintedBy(address minter) external view returns (uint256[] memory) {
         return _mintedBy[minter];
+    }
+
+    // Returns the ordered list of addresses that have owned the token
+    function getOwnershipHistory(uint256 tokenId) external view returns (address[] memory) {
+        require(_ownerOf(tokenId) != address(0), "SVNFT: nonexistent token");
+        return _ownershipHistory[tokenId];
+    }
+
+    // --- User collections (bookmarking) ---
+    mapping(address => uint256[]) private _userCollected;
+    mapping(address => mapping(uint256 => bool)) private _hasCollected;
+
+    function collect(uint256 tokenId) external {
+        require(_ownerOf(tokenId) != address(0), "SVNFT: nonexistent token");
+        require(!_hasCollected[msg.sender][tokenId], "SVNFT: already collected");
+        _hasCollected[msg.sender][tokenId] = true;
+        _userCollected[msg.sender].push(tokenId);
+        emit Collected(msg.sender, tokenId);
+    }
+
+    function myCollected() external view returns (uint256[] memory) {
+        return _userCollected[msg.sender];
+    }
+
+    function getCollected(address user) external view returns (uint256[] memory) {
+        return _userCollected[user];
     }
 
     // Internal helper to assemble minted tokens and data
@@ -145,6 +184,16 @@ contract SafariVerseNFT is ERC721URIStorage, Ownable {
         returns (uint256[] memory tokenIds, TokenData[] memory data)
     {
         return _collectMinted(msg.sender);
+    }
+
+    // Track transfers to append to ownership history (OpenZeppelin v5 hook)
+    function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
+        address from = super._update(to, tokenId, auth);
+        if (to != address(0)) {
+            _ownershipHistory[tokenId].push(to);
+            emit OwnershipHistoryUpdated(tokenId, to);
+        }
+        return from;
     }
 }
 

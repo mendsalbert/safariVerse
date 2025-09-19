@@ -139,10 +139,54 @@ export class WalletConnector {
       }
 
       this.currentWallet = walletInfo;
+      try {
+        localStorage.setItem("sv_last_wallet", "metamask");
+      } catch {}
       return walletInfo;
     } catch (error) {
       console.error("Failed to connect to MetaMask:", error);
       throw error;
+    }
+  }
+
+  // Silent reconnect to MetaMask if already authorized (no prompt)
+  async silentConnectMetaMask(): Promise<WalletInfo | null> {
+    if (!this.isMetaMaskInstalled()) return null;
+    try {
+      const accounts = await window.ethereum.request({
+        method: "eth_accounts",
+      });
+      if (!accounts || accounts.length === 0) return null;
+
+      const chainId = await window.ethereum.request({ method: "eth_chainId" });
+      // Don't force switch silently to avoid prompts; only read network
+      const evmAddress = accounts[0];
+      const { accountId, isNew } = await this.getAccountIdFromEvmAddress(
+        evmAddress
+      );
+
+      const walletInfo: WalletInfo = {
+        type: "metamask",
+        name: "MetaMask",
+        icon: "🦊",
+        isInstalled: true,
+        isConnected: true,
+        accountId,
+        evmAddress,
+        network:
+          chainId === HEDERA_NETWORKS.testnet.chainId ? "testnet" : undefined,
+      };
+      this.currentWallet = walletInfo;
+      try {
+        localStorage.setItem("sv_last_wallet", "metamask");
+      } catch {}
+      if (isNew) {
+        console.log("🔁 Silent MetaMask reconnect mapped account:", accountId);
+      }
+      return walletInfo;
+    } catch (e) {
+      console.warn("Silent MetaMask reconnect failed:", e);
+      return null;
     }
   }
 
