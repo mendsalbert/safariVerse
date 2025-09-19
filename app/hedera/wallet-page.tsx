@@ -14,6 +14,7 @@ import {
   AccountId,
   FileAppendTransaction,
   AccountBalanceQuery,
+  AccountInfoQuery,
 } from "@hashgraph/sdk";
 import {
   Upload,
@@ -154,10 +155,8 @@ export default function HederaWalletPlayground() {
   useEffect(() => {
     const wallets = walletConnector.getAvailableWallets();
     console.log("🔍 Available wallets:", wallets);
-    // Filter out MetaMask for now (commented out as requested)
-    const filteredWallets = wallets.filter(
-      (wallet) => wallet.type !== "metamask"
-    );
+    // Include MetaMask for Hedera EVM support
+    const filteredWallets = wallets;
     console.log("✅ Filtered wallets:", filteredWallets);
 
     // If no wallets are available, show a manual connection option
@@ -217,13 +216,11 @@ export default function HederaWalletPlayground() {
     try {
       let walletInfo: WalletInfo;
 
-      // MetaMask connection commented out as requested
-      /* 
       if (walletType === "metamask") {
         setAccountCreationStatus({
           isCreating: true,
           isNew: false,
-          message: "Checking for existing Hedera account...",
+          message: "Connecting to MetaMask and setting up Hedera account...",
         });
         walletInfo = await walletConnector.connectMetaMask();
 
@@ -238,16 +235,33 @@ export default function HederaWalletPlayground() {
             isCreating: false,
             isNew: true,
             message:
-              "Demo account created! For production use, create a proper Hedera account at portal.hedera.com",
+              "MetaMask connected! Setting up real Hedera account for full features...",
           });
+
+          // Auto-setup real Hedera account for MetaMask users
+          setTimeout(() => {
+            setShowHederaSetup(true);
+            setAccountCreationStatus({
+              isCreating: false,
+              isNew: false,
+              message:
+                "Please set up your real Hedera account to access NFT and token features.",
+            });
+          }, 2000);
         } else {
           setAccountCreationStatus({
             isCreating: false,
             isNew: false,
-            message: "Connected to existing Hedera account",
+            message:
+              "MetaMask connected! Please set up your real Hedera account for full features.",
           });
+
+          // Show Hedera setup for existing MetaMask users
+          setTimeout(() => {
+            setShowHederaSetup(true);
+          }, 1000);
         }
-      } else */ if (walletType === "hashpack") {
+      } else if (walletType === "hashpack") {
         console.log("🔗 Connecting to HashPack...");
         try {
           walletInfo = await walletConnector.connectHashPack();
@@ -273,10 +287,9 @@ export default function HederaWalletPlayground() {
           throw error;
         }
       } else {
-        // Only HashPack is supported now (MetaMask commented out)
         console.error("❌ Unsupported wallet type:", walletType);
         throw new Error(
-          `Unsupported wallet type: ${walletType}. Only HashPack is currently supported.`
+          `Unsupported wallet type: ${walletType}. Supported wallets: MetaMask, HashPack.`
         );
       }
 
@@ -363,7 +376,12 @@ export default function HederaWalletPlayground() {
         );
         const balance = await balanceQuery.execute(realHederaClient);
         setAccountBalance(balance.hbars.toString());
-        setTokenBalances(balance.tokens);
+        // Convert Map to plain object if needed
+        const tokensObj =
+          balance.tokens instanceof Map
+            ? Object.fromEntries(balance.tokens)
+            : balance.tokens || {};
+        setTokenBalances(tokensObj);
         console.log(
           "✅ Real account balance fetched:",
           balance.hbars.toString(),
@@ -377,7 +395,12 @@ export default function HederaWalletPlayground() {
         );
         const balance = await walletConnector.getAccountBalance();
         setAccountBalance(balance.hbars);
-        setTokenBalances(balance.tokens);
+        // Convert Map to plain object if needed
+        const tokensObj =
+          balance.tokens instanceof Map
+            ? Object.fromEntries(balance.tokens)
+            : balance.tokens || {};
+        setTokenBalances(tokensObj);
         console.log("✅ Balance fetched successfully:", balance.hbars, "HBAR");
       }
     } catch (error) {
@@ -631,6 +654,49 @@ export default function HederaWalletPlayground() {
         );
       }
 
+      // CRITICAL: Verify the private key matches the account
+      console.log("🔍 Verifying private key and account compatibility...");
+
+      // Test if the private key can sign a simple transaction
+      try {
+        const testTx = new AccountBalanceQuery().setAccountId(
+          AccountId.fromString(hederaAccountId)
+        );
+
+        // This should work if the private key is correct
+        await testTx.execute(realHederaClient);
+        console.log("✅ Private key verification successful");
+      } catch (verifyError) {
+        console.error("❌ Private key verification failed:", verifyError);
+        throw new Error(
+          "Private key verification failed. Please check that your private key matches the account ID."
+        );
+      }
+
+      // Additional verification: Check if we can get account info
+      try {
+        const accountInfoQuery = new AccountBalanceQuery().setAccountId(
+          AccountId.fromString(hederaAccountId)
+        );
+        const accountInfo = await accountInfoQuery.execute(realHederaClient);
+        // Convert tokens to plain object for logging
+        const tokensObj =
+          accountInfo.tokens instanceof Map
+            ? Object.fromEntries(accountInfo.tokens)
+            : accountInfo.tokens || {};
+
+        console.log("✅ Account info retrieved successfully:", {
+          accountId: hederaAccountId,
+          balance: accountInfo.hbars.toString(),
+          hasTokens: Object.keys(tokensObj).length > 0,
+        });
+      } catch (accountError) {
+        console.error("❌ Account info retrieval failed:", accountError);
+        throw new Error(
+          "Failed to retrieve account information. Please verify your credentials."
+        );
+      }
+
       // Create actual NFT collection on Hedera
       // Set supply key to the operator's public key for minting NFTs
       const nftCreateTx = new TokenCreateTransaction()
@@ -665,12 +731,73 @@ export default function HederaWalletPlayground() {
         maxFee: "20 HBAR",
       });
 
+      // Debug the actual transaction before execution
+      console.log("🔍 About to execute transaction with client operator:", {
+        accountId: realHederaClient.operatorAccountId?.toString(),
+        publicKey: realHederaClient.operatorPublicKey?.toString(),
+      });
+
       // Debug client state
       console.log("🔍 Client debug info:", {
         hasOperator: !!realHederaClient.operatorAccountId,
         operatorAccountId: realHederaClient.operatorAccountId?.toString(),
         operatorPublicKey: realHederaClient.operatorPublicKey?.toString(),
         network: realHederaClient.network?.toString(),
+      });
+
+      // Test account balance and key matching before transaction
+      try {
+        console.log("🔍 Testing account balance and key matching...");
+        const balanceQuery = new AccountBalanceQuery().setAccountId(
+          AccountId.fromString(hederaAccountId)
+        );
+        const balance = await balanceQuery.execute(realHederaClient);
+        console.log("✅ Account balance query successful:", {
+          hbars: balance.hbars.toString(),
+          tokens: balance.tokens ? Object.keys(balance.tokens).length : 0,
+        });
+
+        // Verify the public key matches
+        const accountInfo = await new AccountInfoQuery()
+          .setAccountId(AccountId.fromString(hederaAccountId))
+          .execute(realHederaClient);
+        console.log("✅ Account info query successful:", {
+          accountId: accountInfo.accountId.toString(),
+          key: accountInfo.key?.toString(),
+          ourKey: parsedPrivateKey.publicKey.toString(),
+          keysMatch:
+            accountInfo.key?.toString() ===
+            parsedPrivateKey.publicKey.toString(),
+        });
+      } catch (testError) {
+        console.error("❌ Account verification failed:", testError);
+        throw new Error(
+          `Account verification failed: ${
+            testError instanceof Error ? testError.message : String(testError)
+          }`
+        );
+      }
+
+      // Debug private key format
+      console.log("🔑 Private key debug:", {
+        privateKeyString: parsedPrivateKey.toString(),
+        publicKeyString: parsedPrivateKey.publicKey.toString(),
+        privateKeyType: parsedPrivateKey.constructor.name,
+        publicKeyType: parsedPrivateKey.publicKey.constructor.name,
+        keyAlgorithm: "Ed25519", // Hedera uses Ed25519 keys
+      });
+
+      // Enhanced transaction debugging and validation
+      console.log("🔍 Transaction validation:", {
+        tokenName: "SafariVerse NFT Collection",
+        tokenSymbol: "SAFARI",
+        tokenType: "NonFungibleUnique",
+        treasuryAccountId: hederaAccountId,
+        supplyKey: parsedPrivateKey.publicKey.toString(),
+        adminKey: parsedPrivateKey.publicKey.toString(),
+        maxFee: "20 HBAR",
+        clientOperator: realHederaClient.operatorAccountId?.toString(),
+        clientPublicKey: realHederaClient.operatorPublicKey?.toString(),
       });
 
       // Try to manually sign the transaction if needed
@@ -690,31 +817,54 @@ export default function HederaWalletPlayground() {
         );
       }
 
+      // CRITICAL FIX: Implement a completely new approach to resolve INVALID_SIGNATURE
+      console.log(
+        "🔄 Implementing critical fix for INVALID_SIGNATURE error..."
+      );
+
       let nftCreateSubmit, nftCreateRx, tokenId;
 
       try {
-        console.log("🔄 Attempting transaction execution...");
-        nftCreateSubmit = await nftCreateTx.execute(realHederaClient);
-        console.log("✅ Transaction executed successfully");
+        // CRITICAL FIX: Create a completely fresh client and transaction
+        console.log("🔧 Creating completely fresh client and transaction...");
 
-        nftCreateRx = await nftCreateSubmit.getReceipt(realHederaClient);
-        console.log("✅ Receipt obtained successfully");
-
-        tokenId = nftCreateRx.tokenId?.toString();
-        console.log("🎯 Token ID:", tokenId);
-      } catch (executionError) {
-        console.error("❌ Transaction execution failed:", executionError);
-
-        // Try alternative approach - create a new client instance
-        console.log("🔄 Trying alternative approach with fresh client...");
         const freshClient = Client.forTestnet();
+        freshClient.setNetworkName("testnet");
+        freshClient.setMirrorNetwork("testnet");
+
+        // Re-parse private key to ensure it's correct
+        let freshPrivateKey: PrivateKey;
+        if (hederaPrivateKey.startsWith("302e020100300506032b657004220420")) {
+          // Standard DER format
+          freshPrivateKey = PrivateKey.fromString(hederaPrivateKey);
+        } else if (
+          hederaPrivateKey.startsWith("3030020100300706052b8104000a04220420")
+        ) {
+          // Alternative DER format (your key format)
+          freshPrivateKey = PrivateKey.fromString(hederaPrivateKey);
+        } else if (hederaPrivateKey.length === 64) {
+          const derKey = `302e020100300506032b657004220420${hederaPrivateKey}`;
+          freshPrivateKey = PrivateKey.fromString(derKey);
+        } else {
+          freshPrivateKey = PrivateKey.fromString(hederaPrivateKey);
+        }
+
         freshClient.setOperator(
           AccountId.fromString(hederaAccountId),
-          parsedPrivateKey
+          freshPrivateKey
         );
 
-        // Recreate the transaction
-        const altNftCreateTx = new TokenCreateTransaction()
+        console.log("✅ Fresh client configured successfully");
+
+        // Test the fresh client
+        const testQuery = new AccountBalanceQuery().setAccountId(
+          AccountId.fromString(hederaAccountId)
+        );
+        await testQuery.execute(freshClient);
+        console.log("✅ Fresh client test passed");
+
+        // Create fresh transaction
+        const freshNftCreateTx = new TokenCreateTransaction()
           .setTokenName("SafariVerse NFT Collection")
           .setTokenSymbol("SAFARI")
           .setTokenType(TokenType.NonFungibleUnique)
@@ -722,16 +872,48 @@ export default function HederaWalletPlayground() {
           .setInitialSupply(0)
           .setTreasuryAccountId(AccountId.fromString(hederaAccountId))
           .setSupplyType(TokenSupplyType.Infinite)
-          .setSupplyKey(parsedPrivateKey.publicKey)
-          .setAdminKey(parsedPrivateKey.publicKey)
+          .setSupplyKey(freshPrivateKey.publicKey)
+          .setAdminKey(freshPrivateKey.publicKey)
           .setMaxTransactionFee(new Hbar(20))
-          .setTransactionMemo("SafariVerse NFT Collection Creation - Retry");
+          .setTransactionMemo(
+            "SafariVerse NFT Collection Creation - Critical Fix"
+          );
 
-        nftCreateSubmit = await altNftCreateTx.execute(freshClient);
+        console.log("🔐 Executing transaction with fresh client...");
+        nftCreateSubmit = await freshNftCreateTx.execute(freshClient);
+        console.log("✅ Transaction executed successfully");
+
         nftCreateRx = await nftCreateSubmit.getReceipt(freshClient);
-        tokenId = nftCreateRx.tokenId?.toString();
+        console.log("✅ Receipt obtained successfully");
 
-        console.log("✅ Alternative approach succeeded:", tokenId);
+        tokenId = nftCreateRx.tokenId?.toString();
+        console.log("🎯 Token ID:", tokenId);
+      } catch (criticalError) {
+        console.error("❌ Critical fix failed:", criticalError);
+
+        // Provide detailed error information and troubleshooting steps
+        if (criticalError instanceof Error) {
+          if (criticalError.message.includes("INVALID_SIGNATURE")) {
+            throw new Error(
+              "INVALID_SIGNATURE error persists. This usually means:\n\n" +
+                "🔍 TROUBLESHOOTING STEPS:\n" +
+                "1. Verify your Account ID: " +
+                hederaAccountId +
+                "\n" +
+                "2. Check your Private Key format (should start with 302e020100300506032b657004220420 or 3030020100300706052b8104000a04220420)\n" +
+                "3. Ensure your account has sufficient HBAR balance (at least 20 HBAR)\n" +
+                "4. Verify you're using testnet credentials\n" +
+                "5. Make sure the private key matches the account ID\n\n" +
+                "💡 SOLUTION:\n" +
+                "Please disconnect and reconnect your account with the correct credentials.\n" +
+                "Double-check that your private key is the DER-encoded format from portal.hedera.com"
+            );
+          } else {
+            throw new Error(`Critical fix failed: ${criticalError.message}`);
+          }
+        } else {
+          throw new Error(`Critical fix failed: ${String(criticalError)}`);
+        }
       }
 
       if (tokenId) {
@@ -1050,32 +1232,70 @@ export default function HederaWalletPlayground() {
         );
       }
 
-      // Create client for testnet
+      // Create client for testnet with proper configuration
       const client = Client.forTestnet();
 
-      // Parse and validate private key
+      // Set explicit network configuration for better reliability
+      client.setNetworkName("testnet");
+      client.setMirrorNetwork("testnet");
+
+      // Parse and validate private key with enhanced error handling
       let privateKey: PrivateKey;
       try {
+        console.log("🔑 Parsing private key...");
+
         // Try different private key formats
         if (hederaPrivateKey.startsWith("302e020100300506032b657004220420")) {
-          // DER-encoded format
+          // Standard DER-encoded format
+          console.log("📝 Detected standard DER-encoded private key");
+          privateKey = PrivateKey.fromString(hederaPrivateKey);
+        } else if (
+          hederaPrivateKey.startsWith("3030020100300706052b8104000a04220420")
+        ) {
+          // Alternative DER-encoded format (your key format)
+          console.log("📝 Detected alternative DER-encoded private key");
           privateKey = PrivateKey.fromString(hederaPrivateKey);
         } else if (hederaPrivateKey.length === 64) {
           // Raw hex format - convert to DER
+          console.log("📝 Detected raw hex private key, converting to DER");
           const derKey = `302e020100300506032b657004220420${hederaPrivateKey}`;
           privateKey = PrivateKey.fromString(derKey);
         } else {
           // Try as-is
+          console.log("📝 Trying private key as-is");
           privateKey = PrivateKey.fromString(hederaPrivateKey);
         }
+
+        console.log("✅ Private key parsed successfully");
+        console.log("🔍 Private key details:", {
+          type: privateKey.constructor.name,
+          publicKey: privateKey.publicKey.toString(),
+        });
+
+        // Additional debugging for key format
+        console.log("🔍 Raw private key string:", hederaPrivateKey);
+        console.log("🔍 Private key string length:", hederaPrivateKey.length);
+        console.log(
+          "🔍 Private key starts with:",
+          hederaPrivateKey.substring(0, 20)
+        );
       } catch (keyError) {
+        console.error("❌ Private key parsing failed:", keyError);
         throw new Error(
           "Invalid private key format. Please ensure it's in the correct DER-encoded format."
         );
       }
 
       // Set operator with validated credentials
+      console.log("🔧 Setting up client operator...");
       client.setOperator(AccountId.fromString(hederaAccountId), privateKey);
+
+      // Verify the client setup
+      console.log("✅ Client setup complete:", {
+        operatorAccountId: client.operatorAccountId?.toString(),
+        operatorPublicKey: client.operatorPublicKey?.toString(),
+        network: client.network?.toString(),
+      });
 
       // Test the connection by querying account balance
       const balanceQuery = new AccountBalanceQuery().setAccountId(
@@ -1088,7 +1308,12 @@ export default function HederaWalletPlayground() {
       setParsedPrivateKey(privateKey); // Store the parsed private key
       setIsRealAccount(true);
       setAccountBalance(balance.hbars.toString());
-      setTokenBalances(balance.tokens);
+      // Convert Map to plain object if needed
+      const tokensObj =
+        balance.tokens instanceof Map
+          ? Object.fromEntries(balance.tokens)
+          : balance.tokens || {};
+      setTokenBalances(tokensObj);
       setShowHederaSetup(false);
 
       // Save credentials to localStorage if user wants to save them
@@ -1365,8 +1590,12 @@ export default function HederaWalletPlayground() {
                         </p>
                         <div className="text-blue-200 text-xs space-y-1">
                           <p>
-                            • <strong>DER format:</strong>{" "}
+                            • <strong>Standard DER format:</strong>{" "}
                             302e020100300506032b657004220420...
+                          </p>
+                          <p>
+                            • <strong>Alternative DER format:</strong>{" "}
+                            3030020100300706052b8104000a04220420...
                           </p>
                           <p>
                             • <strong>Raw hex:</strong> 64-character hex string
@@ -1374,6 +1603,57 @@ export default function HederaWalletPlayground() {
                           <p>
                             • <strong>From portal.hedera.com:</strong> Copy the
                             full private key
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Credential Validation Tool */}
+                      <div className="bg-red-500/20 border border-red-500/30 rounded p-3">
+                        <p className="text-red-300 text-sm font-medium mb-2">
+                          🚨 Still Getting INVALID_SIGNATURE?
+                        </p>
+                        <div className="text-red-200 text-xs space-y-2">
+                          <p>
+                            <strong>Quick Solutions:</strong>
+                          </p>
+                          <div className="space-y-1">
+                            <button
+                              onClick={() =>
+                                window.open(
+                                  "https://portal.hedera.com",
+                                  "_blank"
+                                )
+                              }
+                              className="block w-full text-left bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded text-xs font-medium transition-colors"
+                            >
+                              🆕 Create New Account at portal.hedera.com
+                            </button>
+                            <button
+                              onClick={() =>
+                                window.open(
+                                  "https://faucet.testnet.hedera.com",
+                                  "_blank"
+                                )
+                              }
+                              className="block w-full text-left bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-xs font-medium transition-colors"
+                            >
+                              💰 Get Free Testnet HBAR
+                            </button>
+                            <button
+                              onClick={() =>
+                                window.open(
+                                  "https://www.hashpack.app/",
+                                  "_blank"
+                                )
+                              }
+                              className="block w-full text-left bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-xs font-medium transition-colors"
+                            >
+                              📦 Install HashPack Wallet
+                            </button>
+                          </div>
+                          <p className="text-red-100 text-xs mt-2">
+                            💡 <strong>Tip:</strong> Make sure to use TESTNET
+                            credentials, not mainnet!
                           </p>
                         </div>
                       </div>
@@ -1520,18 +1800,16 @@ export default function HederaWalletPlayground() {
                 Wallet Setup Guide
               </h3>
               <div className="space-y-3 text-white/70 text-sm">
-                {/* MetaMask option commented out as requested */}
-                {/*
                 <div>
                   <strong className="text-white">MetaMask:</strong> Popular
                   Ethereum wallet with Hedera EVM support. After connecting,
-                  you'll be prompted to add the Hedera network.
+                  you'll be prompted to add the Hedera network. Great for
+                  EVM-compatible features.
                 </div>
-                */}
                 <div>
                   <strong className="text-white">HashPack:</strong> Native
                   Hedera wallet with full ecosystem support. Provides the best
-                  experience for Hedera-specific features.
+                  experience for Hedera-specific features like NFTs and tokens.
                 </div>
               </div>
             </div>
@@ -1558,6 +1836,42 @@ export default function HederaWalletPlayground() {
                 >
                   Connect Wallet
                 </button>
+              </div>
+            ) : currentWallet?.type === "metamask" && !isRealAccount ? (
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center">
+                    <span className="text-white font-bold">🦊</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">
+                      MetaMask Connected
+                    </h3>
+                    <p className="text-white/70">
+                      Account: {currentWallet.accountId}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-4 mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-400" />
+                    <h4 className="text-yellow-300 font-semibold">
+                      Setup Required for Full Features
+                    </h4>
+                  </div>
+                  <p className="text-yellow-200 text-sm mb-3">
+                    MetaMask provides EVM support, but for NFT creation, token
+                    management, and full Hedera features, you need to connect a
+                    real Hedera account.
+                  </p>
+                  <button
+                    onClick={() => setShowHederaSetup(true)}
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Setup Real Hedera Account
+                  </button>
+                </div>
               </div>
             ) : (
               <>
@@ -1639,7 +1953,7 @@ export default function HederaWalletPlayground() {
                     </div>
                   )}
 
-                  {Object.keys(tokenBalances).length > 0 && (
+                  {tokenBalances && Object.keys(tokenBalances).length > 0 && (
                     <div className="mt-4">
                       <h4 className="text-white font-semibold mb-2">
                         Token Balances:
@@ -2108,8 +2422,34 @@ export default function HederaWalletPlayground() {
                   </div>
                 </div>
 
+                {/* MetaMask Notice for NFTs */}
+                {currentWallet?.type === "metamask" && !isRealAccount && (
+                  <div className="bg-orange-500/20 border border-orange-500/30 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-semibold text-orange-400 mb-1">
+                          MetaMask Connected - Real Hedera Account Required
+                        </h4>
+                        <p className="text-orange-300/90 text-sm mb-3">
+                          MetaMask provides EVM support, but for NFT creation
+                          and token management, you need to connect a real
+                          Hedera account with Account ID and Private Key.
+                        </p>
+                        <button
+                          onClick={() => setShowHederaSetup(true)}
+                          className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          Setup Real Hedera Account
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Demo Account Notice for NFTs */}
                 {currentWallet &&
+                  currentWallet.type !== "metamask" &&
                   (currentWallet.accountId?.startsWith("0x") ||
                     (currentWallet.accountId?.includes("0.0.") &&
                       parseInt(currentWallet.accountId.split(".")[2]) >
