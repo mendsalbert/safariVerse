@@ -15,7 +15,7 @@ export interface SafariVerseNFT$Type {
   readonly deployedLinkReferences: {};
   readonly immutableReferences: {};
   readonly inputSourceName: "project/contracts/SafariVerseNFT.sol";
-  readonly buildInfoId: "solc-0_8_28-76ec8d80163b188796f9ef3a2421c89907b8330b";
+  readonly buildInfoId: "solc-0_8_28-7e1abc9b3617ab778617357c2b65fce0f58d63c2";
 };
 
 import "hardhat/types/artifacts";

@@ -37,17 +37,27 @@ import {
 import { WalletProvider, useWallet } from "../../lib/wallet-provider";
 import WalletModal from "../../components/WalletModal";
 import {
-  getAllProducts,
-  getActiveProducts,
-  createProduct,
+  listProduct,
+  getAllActiveProducts,
+  getProductsByCategory,
   purchaseProduct,
   getMyProducts,
-  getPlatformStats,
-  type Product,
-  type ProductInput,
   formatPrice,
+  parsePrice,
   PRODUCT_CATEGORIES,
-} from "../../lib/safariverse-marketplace";
+  SAFARIMART_ADDRESS,
+  type ProductData,
+  type ProductCategory,
+} from "../../lib/safarimart";
+
+// Additional types for the UI
+type ProductInput = {
+  name: string;
+  description: string;
+  fileUrl: string;
+  price: string;
+  category: string;
+};
 
 // Simple loading overlay
 function LoadingOverlay({ text }: { text: string }) {
@@ -972,9 +982,9 @@ function ShopItem3D({
   scale = [1, 1, 1],
   isFocused = false,
 }: {
-  product: Product;
+  product: ProductData;
   position: [number, number, number];
-  onItemClick: (product: Product) => void;
+  onItemClick: (product: ProductData) => void;
   isHovered: boolean;
   onHover: (hovered: boolean) => void;
   scale?: [number, number, number];
@@ -1077,12 +1087,12 @@ function ShopEnvironment3D({
   products,
 }: {
   selectedCategory: string;
-  onItemClick: (product: Product) => void;
+  onItemClick: (product: ProductData) => void;
   hoveredItem: string | null;
   onHover: (itemId: string | null) => void;
   focusedIndex: number;
   setFocusedIndex: (index: number) => void;
-  products: Product[];
+  products: ProductData[];
 }) {
   // Filter products by category
   const filteredProducts = products.filter(
@@ -1119,11 +1129,13 @@ function ShopEnvironment3D({
             scale={[2.0, 2.0, 2.0]}
             onItemClick={onItemClick}
             isHovered={
-              hoveredItem === String(filteredProducts[focusedIndex].id)
+              hoveredItem === String(filteredProducts[focusedIndex].productId)
             }
             onHover={(hovered) =>
               onHover(
-                hovered ? String(filteredProducts[focusedIndex].id) : null
+                hovered
+                  ? String(filteredProducts[focusedIndex].productId)
+                  : null
               )
             }
             isFocused={true}
@@ -1144,7 +1156,7 @@ function ShopEnvironment3D({
         const tilt = -angle * 0.35;
         return (
           <group
-            key={`background-${product.id}-${index}`}
+            key={`background-${product.productId}-${index}`}
             position={[x, y, z]}
             rotation={[0, tilt, 0]}
           >
@@ -1163,9 +1175,9 @@ function ShopEnvironment3D({
               position={[0, 0, 0]}
               scale={[1.0, 1.0, 1.0]}
               onItemClick={() => setFocusedIndex(index)}
-              isHovered={hoveredItem === String(product.id)}
+              isHovered={hoveredItem === String(product.productId)}
               onHover={(hovered) =>
-                onHover(hovered ? String(product.id) : null)
+                onHover(hovered ? String(product.productId) : null)
               }
               isFocused={false}
             />
@@ -1201,25 +1213,35 @@ function VirtualShop({
   isOpen,
   onClose,
   onBackToMain,
+  onNetworkStatusChange,
+  networkStatus,
+  retryCount,
+  onRetryCountChange,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onBackToMain: () => void;
+  onNetworkStatusChange: (status: "online" | "offline" | "error") => void;
+  networkStatus: "online" | "offline" | "error";
+  retryCount: number;
+  onRetryCountChange: (count: number) => void;
 }) {
   const { wallet, openModal } = useWallet();
-  const [selectedCategory, setSelectedCategory] = useState("3d-model");
+  const [selectedCategory, setSelectedCategory] = useState<ProductCategory>(
+    PRODUCT_CATEGORIES[0]
+  );
   const [cart, setCart] = useState<
     Array<{
       id: string;
       name: string;
       price: string;
       quantity: number;
-      product: Product;
+      product: ProductData;
     }>
   >([]);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -1236,21 +1258,78 @@ function VirtualShop({
     }
   }, [isOpen]);
 
+  // Also reload data when network status changes to online
+  useEffect(() => {
+    if (isOpen && networkStatus === "online") {
+      console.log(
+        "🔄 Network status changed to online, reloading marketplace data..."
+      );
+      loadMarketplaceData();
+    }
+  }, [networkStatus, isOpen]);
+
   const loadMarketplaceData = async () => {
     try {
       setLoading(true);
-      const [productsData, stats] = await Promise.all([
-        getActiveProducts(0, 50),
-        getPlatformStats(),
-      ]);
-      setProducts(productsData.products);
-      setPlatformStats({
-        totalProducts: Number(stats.totalProducts),
-        totalSales: Number(stats.totalSales),
-        totalRevenue: formatPrice(stats.totalRevenue),
+      console.log("🔄 Loading marketplace data...");
+
+      // Load all active products from SafariMart
+      const productsData = await getAllActiveProducts();
+
+      console.log("📊 Marketplace data loaded:", {
+        products: productsData.length,
       });
+
+      setProducts(productsData);
+      setPlatformStats({
+        totalProducts: productsData.length,
+        totalSales: productsData.reduce(
+          (sum, p) => sum + Number(p.totalSales),
+          0
+        ),
+        totalRevenue: formatPrice(
+          productsData.reduce((sum, p) => sum + p.totalRevenue, BigInt(0))
+        ),
+      });
+      onNetworkStatusChange("online");
+      onRetryCountChange(0); // Reset retry count on success
     } catch (error) {
       console.error("Failed to load marketplace data:", error);
+
+      // Set default values when loading fails
+      setProducts([]);
+      setPlatformStats({
+        totalProducts: 0,
+        totalSales: 0,
+        totalRevenue: "0",
+      });
+
+      // Show user-friendly error message
+      if (error instanceof Error) {
+        if (error.message.includes("circuit breaker")) {
+          console.warn(
+            "🔄 MetaMask circuit breaker detected - using offline mode"
+          );
+          onNetworkStatusChange("offline");
+        } else {
+          console.warn("⚠️ Network issues detected - using offline mode");
+          onNetworkStatusChange("error");
+        }
+      } else {
+        onNetworkStatusChange("error");
+      }
+
+      // Auto-retry after a delay (up to 3 times)
+      if (retryCount < 3) {
+        const delay = Math.min(5000 * Math.pow(2, retryCount), 30000); // Exponential backoff, max 30s
+        console.log(
+          `🔄 Retrying in ${delay}ms (attempt ${retryCount + 1}/3)...`
+        );
+        setTimeout(() => {
+          onRetryCountChange(retryCount + 1);
+          loadMarketplaceData();
+        }, delay);
+      }
     } finally {
       setLoading(false);
     }
@@ -1261,14 +1340,14 @@ function VirtualShop({
     (product) => product.category === selectedCategory && product.isActive
   );
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: ProductData) => {
     setCart((prev) => {
       const existing = prev.find(
-        (cartItem) => cartItem.id === String(product.id)
+        (cartItem) => cartItem.id === String(product.productId)
       );
       if (existing) {
         return prev.map((cartItem) =>
-          cartItem.id === String(product.id)
+          cartItem.id === String(product.productId)
             ? { ...cartItem, quantity: cartItem.quantity + 1 }
             : cartItem
         );
@@ -1276,8 +1355,8 @@ function VirtualShop({
       return [
         ...prev,
         {
-          id: String(product.id),
-          name: product.name,
+          id: String(product.productId),
+          name: product.title,
           price: formatPrice(product.price),
           quantity: 1,
           product: product,
@@ -1286,7 +1365,7 @@ function VirtualShop({
     });
   };
 
-  const purchaseItem = async (product: Product) => {
+  const purchaseItem = async (product: ProductData) => {
     if (!wallet?.evmAddress) {
       openModal();
       return;
@@ -1294,26 +1373,43 @@ function VirtualShop({
 
     try {
       setLoading(true);
-      // Convert BigInt price to string directly without double conversion
-      const priceString = product.price.toString();
       console.log(`=== PURCHASE DEBUG ===`);
-      console.log(`Product ID: ${product.id}`);
-      console.log(`Product name: ${product.name}`);
+      console.log(`Product ID: ${product.productId}`);
+      console.log(`Product name: ${product.title}`);
       console.log(`Product price (BigInt): ${product.price}`);
-      console.log(`Product price (string): ${priceString}`);
+      console.log(`Product price (string): ${product.price.toString()}`);
+      console.log(`Product price (hex): 0x${product.price.toString(16)}`);
       console.log(
         `Product price (formatted): ${formatPrice(product.price)} HBAR`
       );
       console.log(`Wallet address: ${wallet.evmAddress}`);
 
-      // Send the exact on-chain price (wei)
-      const result = await purchaseProduct(product.id, priceString);
+      // Purchase the product using SafariMart library
+      const result = await purchaseProduct(product.productId);
       alert(`Purchase successful! Transaction: ${result.txHash}`);
       // Refresh marketplace data
       await loadMarketplaceData();
     } catch (error: any) {
       console.error("Purchase error:", error);
-      alert(`Purchase failed: ${error?.message || String(error)}`);
+
+      const errorMessage = error?.message || String(error);
+
+      // Handle circuit breaker specifically
+      if (
+        errorMessage?.includes("circuit breaker") ||
+        errorMessage?.includes("circuit breaker is open")
+      ) {
+        alert(
+          "⚠️ MetaMask circuit breaker is open!\n\n" +
+            "This happens when too many requests are made in a short time.\n\n" +
+            "Please wait 30-60 seconds and try again, or:\n" +
+            "1. Refresh the page\n" +
+            "2. Restart MetaMask\n" +
+            "3. Try again in a few minutes"
+        );
+      } else {
+        alert(`Purchase failed: ${errorMessage}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -1360,7 +1456,25 @@ function VirtualShop({
       await loadMarketplaceData();
     } catch (error: any) {
       console.error("Checkout failed:", error);
-      alert(`Checkout failed: ${error?.message || String(error)}`);
+
+      const errorMessage = error?.message || String(error);
+
+      // Handle circuit breaker specifically
+      if (
+        errorMessage?.includes("circuit breaker") ||
+        errorMessage?.includes("circuit breaker is open")
+      ) {
+        alert(
+          "⚠️ MetaMask circuit breaker is open!\n\n" +
+            "This happens when too many requests are made in a short time.\n\n" +
+            "Please wait 30-60 seconds and try again, or:\n" +
+            "1. Refresh the page\n" +
+            "2. Restart MetaMask\n" +
+            "3. Try again in a few minutes"
+        );
+      } else {
+        alert(`Checkout failed: ${errorMessage}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -1588,7 +1702,7 @@ function VirtualShop({
           {filteredProducts[focusedIndex] && (
             <div className="flex items-center gap-3 px-4">
               <div className="text-amber-300 font-semibold">
-                {filteredProducts[focusedIndex].name}
+                {filteredProducts[focusedIndex].title}
               </div>
               <div className="text-yellow-400 font-bold">
                 {formatPrice(filteredProducts[focusedIndex].price)} HBAR
@@ -1653,7 +1767,7 @@ function VirtualShop({
           {PRODUCT_CATEGORIES.map((category) => (
             <button
               key={category}
-              onClick={() => setSelectedCategory(category)}
+              onClick={() => setSelectedCategory(category as ProductCategory)}
               className={`px-3 py-2 rounded-lg text-sm transition-all ${
                 selectedCategory === category
                   ? "bg-gradient-to-r from-yellow-500 to-amber-500 text-white"
@@ -1670,6 +1784,28 @@ function VirtualShop({
           >
             <Plus className="w-4 h-4" />
             Add Product
+          </button>
+          {/* Refresh Button */}
+          <button
+            onClick={loadMarketplaceData}
+            disabled={loading}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 transition-all z-50 relative disabled:opacity-50"
+            title="Refresh marketplace data"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            {loading ? "Loading..." : "Refresh"}
           </button>
         </div>
       </div>
@@ -1777,6 +1913,8 @@ function SafariMartUI({
   onOpenMarketplace,
   onOpenGallery,
   onOpenMusic,
+  networkStatus,
+  onRetryConnection,
 }: {
   countryId: string;
   isShopOpen: boolean;
@@ -1787,6 +1925,8 @@ function SafariMartUI({
   onOpenMarketplace: () => void;
   onOpenGallery: () => void;
   onOpenMusic: () => void;
+  networkStatus: "online" | "offline" | "error";
+  onRetryConnection: () => void;
 }) {
   const router = useRouter();
   const { wallet, openModal, disconnect } = useWallet();
@@ -1804,14 +1944,100 @@ function SafariMartUI({
     }
   }, []);
 
-  // Fetch HBAR balance when wallet is connected
+  // Fetch HBAR balance when wallet is connected with improved error handling
   useEffect(() => {
-    const fetchHbarBalance = async () => {
+    const fetchHbarBalance = async (retryCount = 0) => {
       if (wallet?.evmAddress) {
         try {
-          const { BrowserProvider } = await import("ethers");
-          const provider = new BrowserProvider(window.ethereum, 296);
-          const balance = await provider.getBalance(wallet.evmAddress);
+          // Check if we have a cached balance first
+          const cachedBalance = localStorage.getItem(
+            `hbar_balance_${wallet.evmAddress}`
+          );
+          const cacheTime = localStorage.getItem(
+            `hbar_balance_time_${wallet.evmAddress}`
+          );
+
+          // Use cached balance if it's less than 30 seconds old
+          if (
+            cachedBalance &&
+            cacheTime &&
+            Date.now() - parseInt(cacheTime) < 30000
+          ) {
+            console.log("📊 Using cached HBAR balance");
+            setHbarBalance(cachedBalance);
+            return;
+          }
+
+          // Try multiple RPC providers as fallback
+          const rpcUrls = [
+            "https://testnet.hashio.io/api", // Primary Hedera RPC
+            "https://hedera-testnet.public.blastapi.io", // Backup RPC
+          ];
+
+          let balance = null;
+          let lastError = null;
+
+          for (const rpcUrl of rpcUrls) {
+            try {
+              console.log(`🔍 Trying RPC: ${rpcUrl}`);
+              const { JsonRpcProvider } = await import("ethers");
+              const provider = new JsonRpcProvider(rpcUrl, {
+                name: "hedera-testnet",
+                chainId: 296,
+              });
+
+              balance = await provider.getBalance(wallet.evmAddress);
+              console.log(
+                `✅ Balance fetched from ${rpcUrl}: ${balance.toString()}`
+              );
+              break; // Success, exit the loop
+            } catch (error) {
+              console.warn(
+                `⚠️ Failed to fetch from ${rpcUrl}:`,
+                (error as Error).message
+              );
+              lastError = error;
+              continue; // Try next RPC
+            }
+          }
+
+          if (!balance) {
+            // All RPCs failed, try MetaMask as last resort with circuit breaker handling
+            try {
+              console.log("🔍 Trying MetaMask RPC as last resort...");
+              const { BrowserProvider } = await import("ethers");
+              const provider = new BrowserProvider(window.ethereum, 296);
+              balance = await provider.getBalance(wallet.evmAddress);
+            } catch (error) {
+              console.error("❌ All balance fetch methods failed:", error);
+
+              // Handle circuit breaker specifically
+              const errorMessage = (error as Error).message;
+              if (
+                errorMessage?.includes("circuit breaker") ||
+                errorMessage?.includes("circuit breaker is open")
+              ) {
+                console.warn(
+                  "🔄 MetaMask circuit breaker is open, using fallback balance"
+                );
+                setHbarBalance("--"); // Show loading state
+
+                // Retry after a delay if we haven't exceeded max retries
+                if (retryCount < 2) {
+                  setTimeout(
+                    () => fetchHbarBalance(retryCount + 1),
+                    5000 + retryCount * 5000
+                  );
+                  return;
+                }
+              }
+
+              // Use cached balance or default
+              const fallbackBalance = cachedBalance || "0";
+              setHbarBalance(fallbackBalance);
+              return;
+            }
+          }
 
           // Convert from wei to HBAR (1 HBAR = 10^18 wei)
           const balanceInHbar = Number(balance) / 1e18;
@@ -1828,10 +2054,25 @@ function SafariMartUI({
             formattedBalance = balanceInHbar.toFixed(4); // 4 decimals for small amounts
           }
 
+          // Cache the balance
+          localStorage.setItem(
+            `hbar_balance_${wallet.evmAddress}`,
+            formattedBalance
+          );
+          localStorage.setItem(
+            `hbar_balance_time_${wallet.evmAddress}`,
+            Date.now().toString()
+          );
+
           setHbarBalance(formattedBalance);
         } catch (error) {
           console.error("Failed to fetch HBAR balance:", error);
-          setHbarBalance("0");
+
+          // Try to use cached balance
+          const cachedBalance = localStorage.getItem(
+            `hbar_balance_${wallet.evmAddress}`
+          );
+          setHbarBalance(cachedBalance || "0");
         }
       } else {
         setHbarBalance("0");
@@ -1882,13 +2123,6 @@ function SafariMartUI({
 
   return (
     <div className="absolute inset-0">
-      {/* Virtual Shop */}
-      <VirtualShop
-        isOpen={isShopOpen}
-        onClose={() => setIsShopOpen(false)}
-        onBackToMain={onBackToMain}
-      />
-
       {/* Top Navigation */}
       <div className="absolute top-4 left-4 right-4 z-10 pointer-events-auto">
         <div className="bg-black/60 backdrop-blur-lg rounded-xl p-4 border border-amber-500/30">
@@ -1904,6 +2138,54 @@ function SafariMartUI({
                 Safariverse -{" "}
                 {countryId.charAt(0).toUpperCase() + countryId.slice(1)}
               </h1>
+              {/* Network Status Indicator */}
+              <div
+                className={`flex items-center gap-2 px-2 py-1 rounded text-xs font-medium ${
+                  networkStatus === "online"
+                    ? "bg-green-900/40 text-green-300 border border-green-500/30"
+                    : networkStatus === "offline"
+                    ? "bg-yellow-900/40 text-yellow-300 border border-yellow-500/30"
+                    : "bg-red-900/40 text-red-300 border border-red-500/30"
+                }`}
+              >
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    networkStatus === "online"
+                      ? "bg-green-400"
+                      : networkStatus === "offline"
+                      ? "bg-yellow-400"
+                      : "bg-red-400"
+                  }`}
+                />
+                {networkStatus === "online"
+                  ? "Online"
+                  : networkStatus === "offline"
+                  ? "Offline Mode"
+                  : "Network Error"}
+              </div>
+              {/* Manual Retry Button */}
+              {networkStatus !== "online" && (
+                <button
+                  onClick={onRetryConnection}
+                  className="flex items-center gap-1 px-2 py-1 bg-blue-900/40 text-blue-300 border border-blue-500/30 rounded text-xs hover:bg-blue-800/40 transition-colors"
+                  title="Retry connection"
+                >
+                  <svg
+                    className="w-3 h-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  Retry
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-4">
               {/* Wallet Connection */}
@@ -2258,10 +2540,12 @@ function CreateProductModal({
     description: "",
     fileUrl: "",
     price: "",
-    category: "3d-model",
+    category: PRODUCT_CATEGORIES[0],
   });
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
+  const [isCircuitBreakerOpen, setIsCircuitBreakerOpen] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2278,9 +2562,20 @@ function CreateProductModal({
 
     try {
       setLoading(true);
+      setIsCircuitBreakerOpen(false);
       setStatus("Creating product...");
-      const result = await createProduct(formData);
-      setStatus(`Product created! Transaction: ${result.txHash}`);
+
+      const result = await listProduct({
+        fileUrl: formData.fileUrl,
+        title: formData.name,
+        description: formData.description,
+        category: formData.category,
+        priceEth: formData.price,
+      });
+      setStatus(
+        `✅ Product created successfully! Transaction: ${result.txHash}`
+      );
+
       setTimeout(() => {
         onProductCreated();
         onClose();
@@ -2289,12 +2584,48 @@ function CreateProductModal({
           description: "",
           fileUrl: "",
           price: "",
-          category: "3d-model",
+          category: PRODUCT_CATEGORIES[0],
         });
         setStatus("");
-      }, 2000);
+        setRetryCount(0);
+      }, 3000); // Increased delay to ensure blockchain state is updated
     } catch (error: any) {
-      setStatus(`Error: ${error?.message || String(error)}`);
+      console.error("Create product error:", error);
+
+      const errorMessage = error?.message || String(error);
+
+      // Check if it's a circuit breaker error
+      if (
+        errorMessage?.includes("circuit breaker") ||
+        errorMessage?.includes("circuit breaker is open")
+      ) {
+        setIsCircuitBreakerOpen(true);
+        setStatus(
+          `⚠️ MetaMask circuit breaker is open. Please wait 30-60 seconds and try again.`
+        );
+
+        // Auto-retry after delay (up to 3 times)
+        if (retryCount < 3) {
+          const delay = Math.min(30000 * Math.pow(2, retryCount), 120000); // 30s, 60s, 120s
+          console.log(
+            `🔄 Auto-retrying create product in ${delay}ms (attempt ${
+              retryCount + 1
+            }/3)...`
+          );
+          setTimeout(() => {
+            setRetryCount((prev) => prev + 1);
+            setStatus("🔄 Circuit breaker recovered, retrying...");
+            // Retry the submission
+            handleSubmit(e);
+          }, delay);
+        } else {
+          setStatus(
+            `❌ Circuit breaker still open after ${retryCount} attempts. Please refresh the page and try again.`
+          );
+        }
+      } else {
+        setStatus(`❌ Error: ${errorMessage}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -2307,9 +2638,17 @@ function CreateProductModal({
       <div className="relative max-w-2xl w-full mx-4">
         <div className="bg-black/70 border border-amber-500/30 rounded-2xl overflow-hidden">
           <div className="p-6">
-            <h3 className="text-xl font-semibold text-yellow-100 mb-4">
-              Create New Product
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-yellow-100">
+                Create New Product
+              </h3>
+              {isCircuitBreakerOpen && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-yellow-900/40 text-yellow-300 border border-yellow-500/30 rounded-lg text-sm">
+                  <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
+                  Circuit Breaker Open
+                </div>
+              )}
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-orange-200 mb-2">
@@ -2398,12 +2737,51 @@ function CreateProductModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || isCircuitBreakerOpen}
                   className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:from-orange-600 hover:to-amber-600 transition-colors shadow disabled:opacity-50"
                 >
-                  {loading ? "Creating..." : "Create Product"}
+                  {loading
+                    ? "Creating..."
+                    : isCircuitBreakerOpen
+                    ? "Circuit Breaker Open"
+                    : "Create Product"}
                 </button>
               </div>
+              {isCircuitBreakerOpen && (
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCircuitBreakerOpen(false);
+                      setRetryCount(0);
+                      setStatus("");
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 bg-blue-900/40 text-blue-300 border border-blue-500/30 rounded-lg text-sm hover:bg-blue-800/40 transition-colors"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    Retry Now
+                  </button>
+                  <span className="text-xs text-orange-300">
+                    Or wait for auto-retry (
+                    {retryCount < 3
+                      ? `${30 * Math.pow(2, retryCount)}s`
+                      : "disabled"}
+                    )
+                  </span>
+                </div>
+              )}
               {status && (
                 <div className="mt-4 p-3 rounded-lg bg-black/40 border border-amber-500/30">
                   <p className="text-sm text-orange-200">{status}</p>
@@ -2437,6 +2815,10 @@ function SafariMartPageContent() {
   const [isLoadingMarketplace, setIsLoadingMarketplace] = useState(false);
   const [isLoadingGallery, setIsLoadingGallery] = useState(false);
   const [isLoadingMusic, setIsLoadingMusic] = useState(false);
+  const [networkStatus, setNetworkStatus] = useState<
+    "online" | "offline" | "error"
+  >("online");
+  const [retryCount, setRetryCount] = useState(0);
 
   const openMarketplace = () => {
     setIsLoadingMarketplace(true);
@@ -2461,6 +2843,12 @@ function SafariMartPageContent() {
       setIsLoadingMusic(false);
       router.push(`/music/${countryId}`);
     }, 800);
+  };
+
+  const handleRetryConnection = () => {
+    setRetryCount(0);
+    setNetworkStatus("online");
+    // The VirtualShop component will automatically retry when networkStatus changes
   };
 
   return (
@@ -2492,6 +2880,17 @@ function SafariMartPageContent() {
         />
       </Canvas>
 
+      {/* Virtual Shop */}
+      <VirtualShop
+        isOpen={isShopOpen}
+        onClose={() => setIsShopOpen(false)}
+        onBackToMain={() => router.back()}
+        onNetworkStatusChange={setNetworkStatus}
+        networkStatus={networkStatus}
+        retryCount={retryCount}
+        onRetryCountChange={setRetryCount}
+      />
+
       {/* UI Overlay */}
       <div className="pointer-events-none">
         <SafariMartUI
@@ -2504,6 +2903,8 @@ function SafariMartPageContent() {
           onOpenMarketplace={openMarketplace}
           onOpenGallery={openGallery}
           onOpenMusic={openMusic}
+          networkStatus={networkStatus}
+          onRetryConnection={handleRetryConnection}
         />
       </div>
     </div>
