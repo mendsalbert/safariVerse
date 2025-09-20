@@ -32,7 +32,22 @@ import {
   Gift,
   Crown,
   Sparkles,
+  Plus,
 } from "lucide-react";
+import { WalletProvider, useWallet } from "../../lib/wallet-provider";
+import WalletModal from "../../components/WalletModal";
+import {
+  getAllProducts,
+  getActiveProducts,
+  createProduct,
+  purchaseProduct,
+  getMyProducts,
+  getPlatformStats,
+  type Product,
+  type ProductInput,
+  formatPrice,
+  PRODUCT_CATEGORIES,
+} from "../../lib/safariverse-marketplace";
 
 // Simple loading overlay
 function LoadingOverlay({ text }: { text: string }) {
@@ -906,33 +921,50 @@ function ArtifactModel({
   targetSize?: number; // desired max dimension in world units
   scaleMultiplier?: number; // optional additional multiplier after fitting
 }) {
-  const { scene } = useGLTF(modelPath);
+  try {
+    // Preload the model to prevent blocks from showing
+    const { scene } = useGLTF(modelPath, true);
 
-  const { fittedScene, finalScale } = useMemo(() => {
-    const cloned = scene.clone(true);
-    // Compute bounding box of the model
-    const box = new THREE.Box3().setFromObject(cloned);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z) || 1;
-    const fitScale = targetSize / maxDim;
-    const normalizedScale = fitScale * scaleMultiplier;
-    return { fittedScene: cloned, finalScale: normalizedScale };
-  }, [scene, targetSize, scaleMultiplier]);
+    const { fittedScene, finalScale } = useMemo(() => {
+      const cloned = scene.clone(true);
+      // Compute bounding box of the model
+      const box = new THREE.Box3().setFromObject(cloned);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const maxDim = Math.max(size.x, size.y, size.z) || 1;
+      const fitScale = targetSize / maxDim;
+      const normalizedScale = fitScale * scaleMultiplier;
+      return { fittedScene: cloned, finalScale: normalizedScale };
+    }, [scene, targetSize, scaleMultiplier]);
 
-  return (
-    <primitive
-      object={fittedScene}
-      scale={[finalScale, finalScale, finalScale]}
-      position={position}
-      rotation={rotation}
-    />
-  );
+    return (
+      <primitive
+        object={fittedScene}
+        scale={[finalScale, finalScale, finalScale]}
+        position={position}
+        rotation={rotation}
+      />
+    );
+  } catch (error) {
+    console.warn(`Failed to load GLB model: ${modelPath}`, error);
+    console.log(`Model path details:`, {
+      originalPath: modelPath,
+      isProxyUrl: modelPath.startsWith("/api/glb"),
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Return a fallback box if model fails to load
+    return (
+      <mesh position={position} rotation={rotation} scale={[0.5, 0.5, 0.5]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color="#8B4513" />
+      </mesh>
+    );
+  }
 }
 
 // 3D Shop Item Component
 function ShopItem3D({
-  item,
+  product,
   position,
   onItemClick,
   isHovered,
@@ -940,9 +972,9 @@ function ShopItem3D({
   scale = [1, 1, 1],
   isFocused = false,
 }: {
-  item: any;
+  product: Product;
   position: [number, number, number];
-  onItemClick: (item: any) => void;
+  onItemClick: (product: Product) => void;
   isHovered: boolean;
   onHover: (hovered: boolean) => void;
   scale?: [number, number, number];
@@ -969,61 +1001,48 @@ function ShopItem3D({
   });
 
   const getArtifactModel = () => {
-    switch (item.id) {
-      case "mask1":
+    // Use the product's fileUrl if it's a .glb file, otherwise fallback to default
+    if (product.fileUrl && product.fileUrl.toLowerCase().endsWith(".glb")) {
+      // Use the same URL proxying method as the NFT page
+      const proxiedUrl = `/api/glb?url=${encodeURIComponent(product.fileUrl)}`;
+      console.log(`Loading artifact from: ${product.fileUrl} -> ${proxiedUrl}`);
+
+      // Preload the external GLB file
+      useGLTF.preload(proxiedUrl);
+
+      return <ArtifactModel modelPath={proxiedUrl} />;
+    }
+
+    // Fallback to default model based on category
+    switch (product.category) {
+      case "3d-model":
         return (
           <ArtifactModel modelPath="/artifact/African mask sculpture .glb" />
         );
-      case "pottery1":
+      case "texture":
         return <ArtifactModel modelPath="/artifact/African Women Bust.glb" />;
-      case "textile1":
+      case "audio":
+        return <ArtifactModel modelPath="/artifact/African Drum.glb" />;
+      case "animation":
         return <ArtifactModel modelPath="/artifact/Wooden ornament.glb" />;
-      case "jewelry1":
+      case "material":
         return (
           <ArtifactModel modelPath="/artifact/African woman wood sculpture .glb" />
         );
-      case "artifact1":
+      case "shader":
         return (
           <ArtifactModel modelPath="/artifact/African Artifact - Yale Art Gallery.glb" />
         );
-      case "fashion1":
+      case "script":
         return (
           <ArtifactModel modelPath="/artifact/%23Fashion%20Bucket%20Hat%20from%20Africa%20.glb" />
         );
-      case "plant1":
+      case "template":
         return (
           <ArtifactModel modelPath="/artifact/Little Succulent Plant.glb" />
         );
-      case "drum1":
-        return <ArtifactModel modelPath="/artifact/African Drum.glb" />;
-      case "cucumber1":
+      case "asset-pack":
         return <ArtifactModel modelPath="/artifact/African Cucumber.glb" />;
-      case "nft1":
-        return (
-          <ArtifactModel modelPath="/artifact/African Artifact - Yale Art Gallery.glb" />
-        );
-      case "nft2":
-        return (
-          <ArtifactModel modelPath="/artifact/%23Fashion%20Bucket%20Hat%20from%20Africa%20.glb" />
-        );
-      case "nft3":
-        return (
-          <ArtifactModel modelPath="/artifact/Little Succulent Plant.glb" />
-        );
-      case "nft4":
-        return <ArtifactModel modelPath="/artifact/African Drum.glb" />;
-      case "nft5":
-        return <ArtifactModel modelPath="/artifact/African Cucumber.glb" />;
-      case "music1":
-        return <ArtifactModel modelPath="/artifact/African Drum.glb" />;
-      case "music2":
-        return <ArtifactModel modelPath="/artifact/African Cucumber.glb" />;
-      case "music3":
-        return (
-          <ArtifactModel modelPath="/artifact/African mask sculpture .glb" />
-        );
-      case "music4":
-        return <ArtifactModel modelPath="/artifact/African Women Bust.glb" />;
       default:
         return (
           <ArtifactModel modelPath="/artifact/African mask sculpture .glb" />
@@ -1035,7 +1054,7 @@ function ShopItem3D({
     <group position={position}>
       <group
         ref={groupRef}
-        onClick={() => onItemClick(item)}
+        onClick={() => onItemClick(product)}
         onPointerOver={() => onHover(true)}
         onPointerOut={() => onHover(false)}
       >
@@ -1055,132 +1074,20 @@ function ShopEnvironment3D({
   onHover,
   focusedIndex,
   setFocusedIndex,
+  products,
 }: {
   selectedCategory: string;
-  onItemClick: (item: any) => void;
+  onItemClick: (product: Product) => void;
   hoveredItem: string | null;
   onHover: (itemId: string | null) => void;
   focusedIndex: number;
   setFocusedIndex: (index: number) => void;
+  products: Product[];
 }) {
-  const shopItems = {
-    crafts: [
-      {
-        id: "mask1",
-        name: "African Mask Sculpture",
-        price: 150,
-        category: "crafts",
-      },
-      {
-        id: "pottery1",
-        name: "African Women Bust",
-        price: 200,
-        category: "crafts",
-      },
-      {
-        id: "textile1",
-        name: "Wooden Ornament",
-        price: 120,
-        category: "crafts",
-      },
-      {
-        id: "jewelry1",
-        name: "Wood Sculpture",
-        price: 180,
-        category: "crafts",
-      },
-      {
-        id: "artifact1",
-        name: "Yale Art Gallery Artifact",
-        price: 300,
-        category: "crafts",
-      },
-      {
-        id: "fashion1",
-        name: "African Fashion Bucket Hat",
-        price: 250,
-        category: "crafts",
-      },
-      {
-        id: "plant1",
-        name: "Succulent Plant Art",
-        price: 180,
-        category: "crafts",
-      },
-      {
-        id: "drum1",
-        name: "Traditional African Drum",
-        price: 220,
-        category: "crafts",
-      },
-      {
-        id: "cucumber1",
-        name: "African Cucumber Art",
-        price: 160,
-        category: "crafts",
-      },
-    ],
-    digital: [
-      {
-        id: "nft1",
-        name: "Yale Art Gallery NFT",
-        price: 300,
-        category: "digital",
-      },
-      {
-        id: "nft2",
-        name: "Fashion Bucket Hat NFT",
-        price: 250,
-        category: "digital",
-      },
-      {
-        id: "nft3",
-        name: "Succulent Plant NFT",
-        price: 180,
-        category: "digital",
-      },
-      {
-        id: "nft4",
-        name: "African Drum NFT",
-        price: 220,
-        category: "digital",
-      },
-      {
-        id: "nft5",
-        name: "African Cucumber NFT",
-        price: 160,
-        category: "digital",
-      },
-    ],
-    music: [
-      {
-        id: "music1",
-        name: "Traditional African Drum",
-        price: 220,
-        category: "music",
-      },
-      {
-        id: "music2",
-        name: "African Cucumber Art",
-        price: 160,
-        category: "music",
-      },
-      {
-        id: "music3",
-        name: "Mask Sculpture Music",
-        price: 150,
-        category: "music",
-      },
-      {
-        id: "music4",
-        name: "Women Bust Music",
-        price: 200,
-        category: "music",
-      },
-    ],
-  };
-
-  const items = shopItems[selectedCategory as keyof typeof shopItems] || [];
+  // Filter products by category
+  const filteredProducts = products.filter(
+    (product) => product.category === selectedCategory && product.isActive
+  );
 
   // Premium marketplace layout (bright studio + pedestals)
   const radius = 10;
@@ -1194,7 +1101,7 @@ function ShopEnvironment3D({
       </mesh>
 
       {/* Center focused item on pedestal */}
-      {items[focusedIndex] && (
+      {filteredProducts[focusedIndex] && (
         <group position={[0, 2.2, -4]}>
           {/* Pedestal */}
           <mesh position={[0, -1.0, 0]}>
@@ -1207,13 +1114,17 @@ function ShopEnvironment3D({
           </mesh>
           {/* Item */}
           <ShopItem3D
-            item={items[focusedIndex]}
+            product={filteredProducts[focusedIndex]}
             position={[0, 0, 0]}
             scale={[2.0, 2.0, 2.0]}
             onItemClick={onItemClick}
-            isHovered={hoveredItem === items[focusedIndex].id}
+            isHovered={
+              hoveredItem === String(filteredProducts[focusedIndex].id)
+            }
             onHover={(hovered) =>
-              onHover(hovered ? items[focusedIndex].id : null)
+              onHover(
+                hovered ? String(filteredProducts[focusedIndex].id) : null
+              )
             }
             isFocused={true}
           />
@@ -1221,10 +1132,10 @@ function ShopEnvironment3D({
       )}
 
       {/* Background items in a bright arc with pedestals */}
-      {items.map((item, index) => {
+      {filteredProducts.map((product, index) => {
         if (index === focusedIndex) return null;
         const idx = index < focusedIndex ? index : index - 1;
-        const total = items.length - 1;
+        const total = filteredProducts.length - 1;
         const angle =
           ((idx - (total - 1) / 2) / Math.max(total - 1, 1)) * Math.PI * 0.65;
         const x = Math.sin(angle) * radius;
@@ -1232,7 +1143,11 @@ function ShopEnvironment3D({
         const y = 1.9;
         const tilt = -angle * 0.35;
         return (
-          <group key={item.id} position={[x, y, z]} rotation={[0, tilt, 0]}>
+          <group
+            key={`background-${product.id}-${index}`}
+            position={[x, y, z]}
+            rotation={[0, tilt, 0]}
+          >
             {/* Pedestal */}
             <mesh position={[0, -1.0, 0]}>
               <cylinderGeometry args={[0.9, 1.1, 0.35, 24]} />
@@ -1244,12 +1159,14 @@ function ShopEnvironment3D({
             </mesh>
             {/* Item */}
             <ShopItem3D
-              item={item}
+              product={product}
               position={[0, 0, 0]}
               scale={[1.0, 1.0, 1.0]}
               onItemClick={() => setFocusedIndex(index)}
-              isHovered={hoveredItem === item.id}
-              onHover={(hovered) => onHover(hovered ? item.id : null)}
+              isHovered={hoveredItem === String(product.id)}
+              onHover={(hovered) =>
+                onHover(hovered ? String(product.id) : null)
+              }
               isFocused={false}
             />
           </group>
@@ -1289,145 +1206,117 @@ function VirtualShop({
   onClose: () => void;
   onBackToMain: () => void;
 }) {
-  const [selectedCategory, setSelectedCategory] = useState("crafts");
+  const { wallet, openModal } = useWallet();
+  const [selectedCategory, setSelectedCategory] = useState("3d-model");
   const [cart, setCart] = useState<
-    Array<{ id: string; name: string; price: number; quantity: number }>
+    Array<{
+      id: string;
+      name: string;
+      price: string;
+      quantity: number;
+      product: Product;
+    }>
   >([]);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Define shop items outside useEffect for UI access
-  const shopItems = {
-    crafts: [
-      {
-        id: "mask1",
-        name: "African Mask Sculpture",
-        price: 150,
-        category: "crafts",
-      },
-      {
-        id: "pottery1",
-        name: "African Women Bust",
-        price: 200,
-        category: "crafts",
-      },
-      {
-        id: "textile1",
-        name: "Wooden Ornament",
-        price: 120,
-        category: "crafts",
-      },
-      {
-        id: "jewelry1",
-        name: "Wood Sculpture",
-        price: 180,
-        category: "crafts",
-      },
-      {
-        id: "artifact1",
-        name: "Yale Art Gallery Artifact",
-        price: 300,
-        category: "crafts",
-      },
-      {
-        id: "fashion1",
-        name: "African Fashion Bucket Hat",
-        price: 250,
-        category: "crafts",
-      },
-      {
-        id: "plant1",
-        name: "Succulent Plant Art",
-        price: 180,
-        category: "crafts",
-      },
-      {
-        id: "drum1",
-        name: "Traditional African Drum",
-        price: 220,
-        category: "crafts",
-      },
-      {
-        id: "cucumber1",
-        name: "African Cucumber Art",
-        price: 160,
-        category: "crafts",
-      },
-    ],
-    digital: [
-      {
-        id: "nft1",
-        name: "Yale Art Gallery NFT",
-        price: 300,
-        category: "digital",
-      },
-      {
-        id: "nft2",
-        name: "Fashion Bucket Hat NFT",
-        price: 250,
-        category: "digital",
-      },
-      {
-        id: "nft3",
-        name: "Succulent Plant NFT",
-        price: 180,
-        category: "digital",
-      },
-      {
-        id: "nft4",
-        name: "African Drum NFT",
-        price: 220,
-        category: "digital",
-      },
-      {
-        id: "nft5",
-        name: "African Cucumber NFT",
-        price: 160,
-        category: "digital",
-      },
-    ],
-    music: [
-      {
-        id: "music1",
-        name: "Traditional African Drum",
-        price: 220,
-        category: "music",
-      },
-      {
-        id: "music2",
-        name: "African Cucumber Art",
-        price: 160,
-        category: "music",
-      },
-      {
-        id: "music3",
-        name: "Mask Sculpture Music",
-        price: 150,
-        category: "music",
-      },
-      {
-        id: "music4",
-        name: "Women Bust Music",
-        price: 200,
-        category: "music",
-      },
-    ],
+  const [platformStats, setPlatformStats] = useState({
+    totalProducts: 0,
+    totalSales: 0,
+    totalRevenue: "0",
+  });
+
+  // Load marketplace data
+  useEffect(() => {
+    if (isOpen) {
+      loadMarketplaceData();
+    }
+  }, [isOpen]);
+
+  const loadMarketplaceData = async () => {
+    try {
+      setLoading(true);
+      const [productsData, stats] = await Promise.all([
+        getActiveProducts(0, 50),
+        getPlatformStats(),
+      ]);
+      setProducts(productsData.products);
+      setPlatformStats({
+        totalProducts: Number(stats.totalProducts),
+        totalSales: Number(stats.totalSales),
+        totalRevenue: formatPrice(stats.totalRevenue),
+      });
+    } catch (error) {
+      console.error("Failed to load marketplace data:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const items = shopItems[selectedCategory as keyof typeof shopItems] || [];
+  // Filter products by category
+  const filteredProducts = products.filter(
+    (product) => product.category === selectedCategory && product.isActive
+  );
 
-  const addToCart = (item: any) => {
+  const addToCart = (product: Product) => {
     setCart((prev) => {
-      const existing = prev.find((cartItem) => cartItem.id === item.id);
+      const existing = prev.find(
+        (cartItem) => cartItem.id === String(product.id)
+      );
       if (existing) {
         return prev.map((cartItem) =>
-          cartItem.id === item.id
+          cartItem.id === String(product.id)
             ? { ...cartItem, quantity: cartItem.quantity + 1 }
             : cartItem
         );
       }
-      return [...prev, { ...item, quantity: 1 }];
+      return [
+        ...prev,
+        {
+          id: String(product.id),
+          name: product.name,
+          price: formatPrice(product.price),
+          quantity: 1,
+          product: product,
+        },
+      ];
     });
+  };
+
+  const purchaseItem = async (product: Product) => {
+    if (!wallet?.evmAddress) {
+      openModal();
+      return;
+    }
+
+    try {
+      setLoading(true);
+      // Convert BigInt price to string directly without double conversion
+      const priceString = product.price.toString();
+      console.log(`=== PURCHASE DEBUG ===`);
+      console.log(`Product ID: ${product.id}`);
+      console.log(`Product name: ${product.name}`);
+      console.log(`Product price (BigInt): ${product.price}`);
+      console.log(`Product price (string): ${priceString}`);
+      console.log(
+        `Product price (formatted): ${formatPrice(product.price)} HBAR`
+      );
+      console.log(`Wallet address: ${wallet.evmAddress}`);
+
+      // Send the exact on-chain price (wei)
+      const result = await purchaseProduct(product.id, priceString);
+      alert(`Purchase successful! Transaction: ${result.txHash}`);
+      // Refresh marketplace data
+      await loadMarketplaceData();
+    } catch (error: any) {
+      console.error("Purchase error:", error);
+      alert(`Purchase failed: ${error?.message || String(error)}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const removeFromCart = (itemId: string) => {
@@ -1435,15 +1324,65 @@ function VirtualShop({
   };
 
   const getTotalPrice = () => {
-    return cart.reduce((total, item) => total + item.price * item.quantity, 0);
+    return cart.reduce((total, item) => {
+      const price = parseFloat(item.price);
+      return total + (isNaN(price) ? 0 : price) * item.quantity;
+    }, 0);
+  };
+
+  const handleCheckout = async () => {
+    if (!wallet?.evmAddress) {
+      openModal();
+      return;
+    }
+
+    if (cart.length === 0) {
+      alert("Your cart is empty!");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Process each item in the cart
+      for (const item of cart) {
+        if (item.product) {
+          console.log(`Processing checkout for: ${item.name}`);
+          await purchaseItem(item.product);
+        }
+      }
+
+      // Clear cart after successful checkout
+      setCart([]);
+      alert("Checkout successful! All items have been purchased.");
+
+      // Refresh marketplace data
+      await loadMarketplaceData();
+    } catch (error: any) {
+      console.error("Checkout failed:", error);
+      alert(`Checkout failed: ${error?.message || String(error)}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
       if (!isOpen) return;
-      const itemsPerRow = 3;
-      const totalItems = items.length;
+
+      // Don't interfere with typing in input fields
+      const target = event.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.contentEditable === "true")
+      ) {
+        return;
+      }
+
+      const totalItems = filteredProducts.length;
 
       switch (event.key) {
         case "ArrowLeft":
@@ -1475,10 +1414,24 @@ function VirtualShop({
           });
           break;
         case "Enter":
-        case " ":
           event.preventDefault();
-          if (items[focusedIndex]) {
-            addToCart(items[focusedIndex]);
+          if (filteredProducts[focusedIndex]) {
+            addToCart(filteredProducts[focusedIndex]);
+          }
+          break;
+        case " ":
+          // Only prevent space if not in a modal or input field
+          if (!showCreateModal) {
+            event.preventDefault();
+            if (filteredProducts[focusedIndex]) {
+              addToCart(filteredProducts[focusedIndex]);
+            }
+          }
+          break;
+        case "p":
+          event.preventDefault();
+          if (filteredProducts[focusedIndex]) {
+            purchaseItem(filteredProducts[focusedIndex]);
           }
           break;
         case "Escape":
@@ -1490,7 +1443,15 @@ function VirtualShop({
 
     window.addEventListener("keydown", handleKeyPress);
     return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [isOpen, selectedCategory, focusedIndex, addToCart, onClose]);
+  }, [
+    isOpen,
+    selectedCategory,
+    focusedIndex,
+    filteredProducts,
+    addToCart,
+    purchaseItem,
+    onClose,
+  ]);
 
   // Reset focus when category changes
   useEffect(() => {
@@ -1501,6 +1462,12 @@ function VirtualShop({
 
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50">
+      {/* Create Product Modal */}
+      <CreateProductModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onProductCreated={loadMarketplaceData}
+      />
       {/* 3D Shop Environment */}
       <div className="absolute inset-0">
         <Canvas
@@ -1524,6 +1491,7 @@ function VirtualShop({
             onHover={setHoveredItem}
             focusedIndex={focusedIndex}
             setFocusedIndex={setFocusedIndex}
+            products={products}
           />
         </Canvas>
       </div>
@@ -1582,21 +1550,21 @@ function VirtualShop({
       </div>
 
       {/* Current Item Display - Bottom Right */}
-      {items[focusedIndex] && (
+      {filteredProducts[focusedIndex] && (
         <div className="hidden">
           {/* Moved info into bottom control center */}
         </div>
       )}
 
       {/* Carousel Navigation - Bottom Center */}
-      <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10 pointer-events-auto">
+      <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-10 pointer-events-auto">
         <div className="flex items-center gap-4 bg-black/70 backdrop-blur-lg rounded-full px-6 py-3 border border-amber-500/30">
           {/* Previous Button */}
           <button
             type="button"
             onClick={() =>
               setFocusedIndex((prev) =>
-                prev === 0 ? items.length - 1 : prev - 1
+                prev === 0 ? filteredProducts.length - 1 : prev - 1
               )
             }
             className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 rounded-full transition-all duration-300 shadow-lg hover:shadow-amber-500/25"
@@ -1617,21 +1585,28 @@ function VirtualShop({
           </button>
 
           {/* Focused Item Info */}
-          {items[focusedIndex] && (
+          {filteredProducts[focusedIndex] && (
             <div className="flex items-center gap-3 px-4">
               <div className="text-amber-300 font-semibold">
-                {items[focusedIndex].name}
+                {filteredProducts[focusedIndex].name}
               </div>
               <div className="text-yellow-400 font-bold">
-                {items[focusedIndex].price} SVT
+                {formatPrice(filteredProducts[focusedIndex].price)} HBAR
               </div>
+              <button
+                onClick={() => purchaseItem(filteredProducts[focusedIndex])}
+                disabled={loading}
+                className="bg-gradient-to-r from-green-500 to-teal-500 text-white px-3 py-1 rounded text-sm hover:from-green-600 hover:to-teal-600 transition-all disabled:opacity-50"
+              >
+                {loading ? "..." : "Buy"}
+              </button>
             </div>
           )}
 
           {/* Item Counter */}
           <div className="flex items-center gap-2 px-2">
             <div className="flex gap-1">
-              {items.map((_, index) => (
+              {filteredProducts.map((_, index) => (
                 <div
                   key={index}
                   className={`w-2 h-2 rounded-full transition-all duration-300 ${
@@ -1650,7 +1625,7 @@ function VirtualShop({
             type="button"
             onClick={() =>
               setFocusedIndex((prev) =>
-                prev === items.length - 1 ? 0 : prev + 1
+                prev === filteredProducts.length - 1 ? 0 : prev + 1
               )
             }
             className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 rounded-full transition-all duration-300 shadow-lg hover:shadow-amber-500/25"
@@ -1673,9 +1648,9 @@ function VirtualShop({
       </div>
 
       {/* Categories - Bottom Left */}
-      <div className="absolute bottom-4 left-4 z-10">
-        <div className="flex gap-2">
-          {["crafts", "digital", "music"].map((category) => (
+      <div className="absolute bottom-4 left-4 z-10 pointer-events-auto">
+        <div className="flex gap-2 flex-wrap">
+          {PRODUCT_CATEGORIES.map((category) => (
             <button
               key={category}
               onClick={() => setSelectedCategory(category)}
@@ -1688,37 +1663,14 @@ function VirtualShop({
               {category.charAt(0).toUpperCase() + category.slice(1)}
             </button>
           ))}
-        </div>
-      </div>
-
-      {/* Control Instructions - Top Right */}
-      <div className="absolute top-4 right-4 z-10">
-        <div className="bg-black/60 backdrop-blur-lg rounded-lg p-4 border border-amber-500/30 max-w-xs">
-          <h3 className="text-amber-300 font-semibold mb-2 text-sm">
-            🎮 Controls
-          </h3>
-          <div className="space-y-1 text-xs text-orange-200">
-            <div className="flex justify-between">
-              <span>WASD:</span>
-              <span className="text-yellow-300">Move</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Q/E:</span>
-              <span className="text-yellow-300">Up/Down</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Mouse:</span>
-              <span className="text-yellow-300">Look Around</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Scroll:</span>
-              <span className="text-yellow-300">Zoom</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Click:</span>
-              <span className="text-yellow-300">Interact</span>
-            </div>
-          </div>
+          {/* Add Product Button */}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-gradient-to-r from-green-500 to-teal-500 text-white hover:from-green-600 hover:to-teal-600 transition-all z-50 relative"
+          >
+            <Plus className="w-4 h-4" />
+            Add Product
+          </button>
         </div>
       </div>
 
@@ -1747,7 +1699,7 @@ function VirtualShop({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-yellow-400 font-bold text-sm">
-                      {item.price * item.quantity} SVT
+                      {item.price} HBAR
                     </span>
                     <button
                       onClick={() => removeFromCart(item.id)}
@@ -1761,7 +1713,7 @@ function VirtualShop({
               <div className="border-t border-amber-400/30 pt-2 mt-2 space-y-2">
                 <div className="flex justify-between items-center text-lg font-bold text-yellow-100">
                   <span>Total:</span>
-                  <span>{getTotalPrice()} SVT</span>
+                  <span>{getTotalPrice().toFixed(2)} HBAR</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1770,8 +1722,12 @@ function VirtualShop({
                   >
                     Clear
                   </button>
-                  <button className="w-1/2 bg-gradient-to-r from-yellow-500 to-amber-500 text-white py-2 rounded-lg font-bold hover:from-yellow-600 hover:to-amber-600 transition-all text-sm">
-                    Checkout
+                  <button
+                    onClick={handleCheckout}
+                    disabled={loading}
+                    className="w-1/2 bg-gradient-to-r from-yellow-500 to-amber-500 text-white py-2 rounded-lg font-bold hover:from-yellow-600 hover:to-amber-600 transition-all text-sm disabled:opacity-50"
+                  >
+                    {loading ? "Processing..." : "Checkout"}
                   </button>
                 </div>
               </div>
@@ -1779,35 +1735,32 @@ function VirtualShop({
           )}
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Control Instructions - Bottom Left */}
-      <div className="absolute bottom-4 left-4 z-10">
-        <div className="bg-black/60 backdrop-blur-lg rounded-xl p-4 border border-amber-500/30 max-w-sm">
-          <h3 className="text-amber-300 font-semibold mb-2 text-sm">
-            🎮 Movement Controls
-          </h3>
-          <div className="grid grid-cols-2 gap-2 text-xs text-orange-200">
-            <div className="flex justify-between">
-              <span>WASD:</span>
-              <span className="text-yellow-300">Move</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Q/E:</span>
-              <span className="text-yellow-300">Up/Down</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Mouse:</span>
-              <span className="text-yellow-300">Look</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Scroll:</span>
-              <span className="text-yellow-300">Zoom</span>
-            </div>
-          </div>
-          <p className="text-orange-200 text-xs mt-2">
-            Click on buildings to enter shops
-          </p>
-        </div>
+// Simple Marketplace Content Component
+function MarketplaceContent({
+  onOpenMarketplace,
+}: {
+  onOpenMarketplace: () => void;
+}) {
+  return (
+    <div className="bg-black/60 backdrop-blur-lg rounded-xl p-6 border border-amber-500/30 max-w-md">
+      <h3 className="text-xl font-bold text-yellow-100 mb-4 flex items-center gap-2">
+        <ShoppingCart className="w-5 h-5" /> African Marketplace
+      </h3>
+      <div className="space-y-4">
+        <p className="text-orange-200">
+          Explore the vibrant African marketplace filled with unique cultural
+          artifacts, digital art, and traditional crafts.
+        </p>
+        <button
+          onClick={onOpenMarketplace}
+          className="w-full bg-gradient-to-r from-green-500 to-teal-500 text-white px-4 py-3 rounded-lg font-semibold hover:from-green-600 hover:to-teal-600 transition-all"
+        >
+          Enter Marketplace
+        </button>
       </div>
     </div>
   );
@@ -1836,10 +1789,12 @@ function SafariMartUI({
   onOpenMusic: () => void;
 }) {
   const router = useRouter();
+  const { wallet, openModal, disconnect } = useWallet();
   const [activeTab, setActiveTab] = useState<
-    "marketplace" | "gallery" | "music" | "trading" | "social"
+    "marketplace" | "dashboard" | "gallery" | "music" | "trading" | "social"
   >("marketplace");
   const [balance, setBalance] = useState(0);
+  const [hbarBalance, setHbarBalance] = useState("0");
   const [isMuted, setIsMuted] = useState(true);
 
   useEffect(() => {
@@ -1849,12 +1804,55 @@ function SafariMartUI({
     }
   }, []);
 
+  // Fetch HBAR balance when wallet is connected
+  useEffect(() => {
+    const fetchHbarBalance = async () => {
+      if (wallet?.evmAddress) {
+        try {
+          const { BrowserProvider } = await import("ethers");
+          const provider = new BrowserProvider(window.ethereum, 296);
+          const balance = await provider.getBalance(wallet.evmAddress);
+
+          // Convert from wei to HBAR (1 HBAR = 10^18 wei)
+          const balanceInHbar = Number(balance) / 1e18;
+
+          // Format with appropriate decimal places and scientific notation for very large numbers
+          let formattedBalance;
+          if (balanceInHbar >= 1000000) {
+            formattedBalance = (balanceInHbar / 1000000).toFixed(1) + "M"; // Millions
+          } else if (balanceInHbar >= 1000) {
+            formattedBalance = (balanceInHbar / 1000).toFixed(1) + "K"; // Thousands
+          } else if (balanceInHbar >= 1) {
+            formattedBalance = balanceInHbar.toFixed(2); // 2 decimals for amounts >= 1
+          } else {
+            formattedBalance = balanceInHbar.toFixed(4); // 4 decimals for small amounts
+          }
+
+          setHbarBalance(formattedBalance);
+        } catch (error) {
+          console.error("Failed to fetch HBAR balance:", error);
+          setHbarBalance("0");
+        }
+      } else {
+        setHbarBalance("0");
+      }
+    };
+
+    fetchHbarBalance();
+  }, [wallet?.evmAddress]);
+
   const tabs = [
     {
       id: "marketplace",
       label: "Marketplace",
       icon: ShoppingCart,
       color: "from-green-500 to-teal-500",
+    },
+    {
+      id: "dashboard",
+      label: "Dashboard",
+      icon: Crown,
+      color: "from-blue-500 to-purple-500",
     },
     {
       id: "gallery",
@@ -1883,7 +1881,7 @@ function SafariMartUI({
   ];
 
   return (
-    <div className="absolute inset-0 pointer-events-none">
+    <div className="absolute inset-0">
       {/* Virtual Shop */}
       <VirtualShop
         isOpen={isShopOpen}
@@ -1908,10 +1906,52 @@ function SafariMartUI({
               </h1>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-yellow-100">
-                <Coins className="w-5 h-5 text-yellow-400" />
-                <span className="font-semibold">{balance} SVT</span>
-              </div>
+              {/* Wallet Connection */}
+              {!wallet?.evmAddress ? (
+                <button
+                  onClick={() => {
+                    console.log("Opening wallet modal...");
+                    openModal();
+                  }}
+                  className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-2 rounded-lg font-medium hover:from-orange-600 hover:to-red-600 transition-all"
+                >
+                  <Coins className="w-4 h-4" />
+                  Connect MetaMask
+                </button>
+              ) : (
+                <div className="flex items-center gap-4">
+                  {/* Balances */}
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-green-100 bg-green-900/30 px-3 py-1 rounded-lg">
+                      <Coins className="w-4 h-4 text-green-400" />
+                      <span className="font-semibold">{hbarBalance} HBAR</span>
+                    </div>
+                  </div>
+
+                  {/* Wallet Info */}
+                  <div className="flex items-center gap-3">
+                    <div className="text-xs text-gray-300 bg-black/40 px-3 py-1 rounded-lg">
+                      {wallet.evmAddress.slice(0, 6)}...
+                      {wallet.evmAddress.slice(-4)}
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        try {
+                          console.log("Disconnecting wallet...");
+                          await disconnect();
+                          console.log("Wallet disconnected successfully");
+                        } catch (error) {
+                          console.error("Failed to disconnect wallet:", error);
+                        }
+                      }}
+                      className="flex items-center gap-2 bg-gradient-to-r from-red-500 to-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium hover:from-red-600 hover:to-red-700 transition-all"
+                    >
+                      <span>Disconnect</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Control Mode Toggle */}
               <div className="flex items-center gap-2">
@@ -1931,17 +1971,6 @@ function SafariMartUI({
                   {controlMode === "firstPerson" ? "WASD" : "Orbit"}
                 </button>
               </div>
-
-              <button
-                onClick={() => setIsMuted(!isMuted)}
-                className="text-orange-100 hover:text-white transition-colors"
-              >
-                {isMuted ? (
-                  <VolumeX className="w-5 h-5" />
-                ) : (
-                  <Volume2 className="w-5 h-5" />
-                )}
-              </button>
             </div>
           </div>
         </div>
@@ -1985,43 +2014,25 @@ function SafariMartUI({
       {/* Content Panels */}
       <div className="absolute top-20 left-4 right-4 z-10 pointer-events-auto">
         {activeTab === "marketplace" && (
+          <MarketplaceContent onOpenMarketplace={onOpenMarketplace} />
+        )}
+
+        {activeTab === "dashboard" && (
           <div className="bg-black/60 backdrop-blur-lg rounded-xl p-6 border border-amber-500/30 max-w-md">
             <h3 className="text-xl font-bold text-yellow-100 mb-4 flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5" /> African Marketplace
+              <Crown className="w-5 h-5" /> My Dashboard
             </h3>
-            <div className="space-y-3">
-              <div className="bg-orange-900/40 border border-amber-400/30 rounded-lg p-3">
-                <h4 className="font-semibold text-yellow-100">
-                  Traditional Crafts
-                </h4>
-                <p className="text-sm text-orange-200">
-                  Handmade masks, pottery, and textiles
-                </p>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-yellow-400 font-semibold">50 SVT</span>
-                  <button
-                    onClick={onOpenMarketplace}
-                    className="bg-gradient-to-r from-green-500 to-teal-500 text-white px-3 py-1 rounded text-sm hover:from-green-600 hover:to-teal-600 transition-all"
-                  >
-                    Enter Shop
-                  </button>
-                </div>
-              </div>
-              <div className="bg-orange-900/40 border border-amber-400/30 rounded-lg p-3">
-                <h4 className="font-semibold text-yellow-100">Digital Art</h4>
-                <p className="text-sm text-orange-200">
-                  NFTs inspired by African culture
-                </p>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-yellow-400 font-semibold">100 SVT</span>
-                  <button
-                    onClick={onOpenMarketplace}
-                    className="bg-gradient-to-r from-green-500 to-teal-500 text-white px-3 py-1 rounded text-sm hover:from-green-600 hover:to-teal-600 transition-all"
-                  >
-                    Enter Shop
-                  </button>
-                </div>
-              </div>
+            <div className="space-y-4">
+              <p className="text-orange-200">
+                Manage your products, view sales statistics, and track your
+                marketplace activity.
+              </p>
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all"
+              >
+                Open Full Dashboard
+              </button>
             </div>
           </div>
         )}
@@ -2206,18 +2217,24 @@ function SafariMartScene({
       {/* OrbitControls for orbit mode */}
       {controlMode === "orbit" && (
         <OrbitControls
-          enablePan
-          enableZoom
-          enableRotate
+          enablePan={true}
+          enableZoom={true}
+          enableRotate={true}
           minDistance={5}
           maxDistance={50}
           target={[0, 0, 0]}
           enableDamping={true}
           dampingFactor={0.05}
+          zoomSpeed={1.2}
+          rotateSpeed={1.0}
           mouseButtons={{
             LEFT: THREE.MOUSE.ROTATE,
             MIDDLE: THREE.MOUSE.DOLLY,
             RIGHT: THREE.MOUSE.PAN,
+          }}
+          touches={{
+            ONE: THREE.TOUCH.ROTATE,
+            TWO: THREE.TOUCH.DOLLY_PAN,
           }}
         />
       )}
@@ -2225,7 +2242,191 @@ function SafariMartScene({
   );
 }
 
+// Create Product Modal Component
+function CreateProductModal({
+  isOpen,
+  onClose,
+  onProductCreated,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onProductCreated: () => void;
+}) {
+  const { wallet, openModal } = useWallet();
+  const [formData, setFormData] = useState<ProductInput>({
+    name: "",
+    description: "",
+    fileUrl: "",
+    price: "",
+    category: "3d-model",
+  });
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!wallet?.evmAddress) {
+      openModal();
+      return;
+    }
+
+    if (!formData.name || !formData.fileUrl || !formData.price) {
+      setStatus("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setStatus("Creating product...");
+      const result = await createProduct(formData);
+      setStatus(`Product created! Transaction: ${result.txHash}`);
+      setTimeout(() => {
+        onProductCreated();
+        onClose();
+        setFormData({
+          name: "",
+          description: "",
+          fileUrl: "",
+          price: "",
+          category: "3d-model",
+        });
+        setStatus("");
+      }, 2000);
+    } catch (error: any) {
+      setStatus(`Error: ${error?.message || String(error)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto">
+      <div className="relative max-w-2xl w-full mx-4">
+        <div className="bg-black/70 border border-amber-500/30 rounded-2xl overflow-hidden">
+          <div className="p-6">
+            <h3 className="text-xl font-semibold text-yellow-100 mb-4">
+              Create New Product
+            </h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-orange-200 mb-2">
+                  Product Name *
+                </label>
+                <input
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder="Enter product name"
+                  className="w-full rounded-lg border border-amber-500/30 bg-black/40 text-orange-100 px-3 py-2 text-sm placeholder-orange-300/60 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-orange-200 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  placeholder="Describe your product..."
+                  className="w-full rounded-lg border border-amber-500/30 bg-black/40 text-orange-100 px-3 py-2 text-sm placeholder-orange-300/60 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                  rows={3}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-orange-200 mb-2">
+                  File URL (.glb or media) *
+                </label>
+                <input
+                  value={formData.fileUrl}
+                  onChange={(e) =>
+                    setFormData({ ...formData, fileUrl: e.target.value })
+                  }
+                  placeholder="https://.../model.glb"
+                  className="w-full rounded-lg border border-amber-500/30 bg-black/40 text-orange-100 px-3 py-2 text-sm placeholder-orange-300/60 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-orange-200 mb-2">
+                  Price (HBAR) *
+                </label>
+                <input
+                  value={formData.price}
+                  onChange={(e) =>
+                    setFormData({ ...formData, price: e.target.value })
+                  }
+                  placeholder="0.1"
+                  type="number"
+                  step="0.01"
+                  className="w-full rounded-lg border border-amber-500/30 bg-black/40 text-orange-100 px-3 py-2 text-sm placeholder-orange-300/60 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-orange-200 mb-2">
+                  Category
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) =>
+                    setFormData({ ...formData, category: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-amber-500/30 bg-black/40 text-orange-100 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+                >
+                  {PRODUCT_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {category.charAt(0).toUpperCase() + category.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm font-medium text-orange-200 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:from-orange-600 hover:to-amber-600 transition-colors shadow disabled:opacity-50"
+                >
+                  {loading ? "Creating..." : "Create Product"}
+                </button>
+              </div>
+              {status && (
+                <div className="mt-4 p-3 rounded-lg bg-black/40 border border-amber-500/30">
+                  <p className="text-sm text-orange-200">{status}</p>
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SafariMartPage() {
+  return (
+    <WalletProvider>
+      <SafariMartPageContent />
+      <WalletModal />
+    </WalletProvider>
+  );
+}
+
+function SafariMartPageContent() {
   const params = useParams();
   const router = useRouter();
   const countryId = params.countryId as string;
@@ -2263,7 +2464,10 @@ export default function SafariMartPage() {
   };
 
   return (
-    <div className="w-full h-screen relative bg-gradient-to-b from-orange-900 via-red-800 to-amber-900">
+    <div
+      className="w-full h-screen relative bg-gradient-to-b from-orange-900 via-red-800 to-amber-900"
+      style={{ touchAction: "none" }}
+    >
       {/* Loading Overlays */}
       {isLoadingMarketplace && (
         <LoadingOverlay text="Opening African Marketplace..." />
@@ -2273,6 +2477,7 @@ export default function SafariMartPage() {
       {/* 3D SafariMart Environment */}
       <Canvas
         className="w-full h-full"
+        style={{ touchAction: "none", pointerEvents: "auto" }}
         gl={{
           antialias: true,
           alpha: false,
@@ -2288,17 +2493,19 @@ export default function SafariMartPage() {
       </Canvas>
 
       {/* UI Overlay */}
-      <SafariMartUI
-        countryId={countryId}
-        isShopOpen={isShopOpen}
-        setIsShopOpen={setIsShopOpen}
-        onBackToMain={() => router.back()}
-        controlMode={controlMode}
-        setControlMode={setControlMode}
-        onOpenMarketplace={openMarketplace}
-        onOpenGallery={openGallery}
-        onOpenMusic={openMusic}
-      />
+      <div className="pointer-events-none">
+        <SafariMartUI
+          countryId={countryId}
+          isShopOpen={isShopOpen}
+          setIsShopOpen={setIsShopOpen}
+          onBackToMain={() => router.back()}
+          controlMode={controlMode}
+          setControlMode={setControlMode}
+          onOpenMarketplace={openMarketplace}
+          onOpenGallery={openGallery}
+          onOpenMusic={openMusic}
+        />
+      </div>
     </div>
   );
 }

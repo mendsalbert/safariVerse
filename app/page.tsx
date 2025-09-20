@@ -109,7 +109,10 @@ export default function Home() {
   };
 
   return (
-    <div className="relative w-full h-screen overflow-hidden">
+    <div
+      className="relative w-full h-screen overflow-hidden"
+      style={{ touchAction: "none" }}
+    >
       {/* Sky background with clouds */}
       <div
         aria-hidden
@@ -137,7 +140,7 @@ export default function Home() {
 
       {/* Navigation Menu - Only show on map view */}
       {currentView === "map" && (
-        <div className="absolute bottom-6 right-6 z-20 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-amber-500/30 text-orange-100">
+        <div className="absolute bottom-6 right-6 z-20 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-amber-500/30 text-orange-100 pointer-events-auto">
           <div className="flex flex-col gap-2 w-48">
             <button
               onClick={() => router.push("/game/nigeria")}

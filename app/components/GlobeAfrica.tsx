@@ -189,7 +189,7 @@ export default function GlobeAfrica() {
     <div className="w-full h-screen relative bg-gradient-to-b from-orange-900 via-red-800 to-amber-900">
       {/* Modal on load */}
       {showInfo && (
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-20">
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
           <div className="bg-gradient-to-br from-orange-800/90 via-red-800/90 to-amber-800/90 backdrop-blur-xl text-white p-8 rounded-3xl shadow-2xl max-w-4xl border-2 border-orange-400/50 text-center">
             <button
               onClick={() => setShowInfo(false)}
@@ -207,12 +207,12 @@ export default function GlobeAfrica() {
         </div>
       )}
       {/* Top-left title */}
-      <div className="absolute top-6 left-6 z-10 bg-black/50 text-white px-4 py-2 rounded-xl border border-amber-500/40 flex items-center gap-2">
+      <div className="absolute top-6 left-6 z-10 bg-black/50 text-white px-4 py-2 rounded-xl border border-amber-500/40 flex items-center gap-2 pointer-events-none">
         <Globe2 className="w-5 h-5 text-amber-300" />
         <span className="font-display tracking-wide">Africa on the World</span>
       </div>
       {/* Top-right stats */}
-      <div className="absolute top-6 right-6 z-10 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-amber-500/30 text-orange-100">
+      <div className="absolute top-6 right-6 z-10 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-amber-500/30 text-orange-100 pointer-events-none">
         <div className="flex items-center gap-2 mb-2">
           <MapIcon className="w-5 h-5 text-amber-300" />
           <span className="font-semibold">Overview</span>
@@ -231,7 +231,7 @@ export default function GlobeAfrica() {
         </div>
       </div>
       {/* Bottom-left guide */}
-      <div className="absolute bottom-6 left-6 z-10 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-amber-500/30 text-yellow-100">
+      <div className="absolute bottom-6 left-6 z-10 bg-black/60 backdrop-blur-lg p-4 rounded-xl border border-amber-500/30 text-yellow-100 pointer-events-none">
         <div className="flex items-center gap-2 mb-2">
           <Compass className="w-5 h-5 text-yellow-300" />
           <span className="font-semibold">Explorer Guide</span>
@@ -248,7 +248,16 @@ export default function GlobeAfrica() {
         </div>
       </div>
       {/* Bottom-right area intentionally left free for global UI controls */}
-      <Canvas shadows onPointerMissed={() => {}}>
+      <Canvas
+        shadows
+        onPointerMissed={() => {}}
+        style={{ touchAction: "none" }}
+        gl={{
+          antialias: true,
+          alpha: false,
+          powerPreference: "high-performance",
+        }}
+      >
         <Suspense fallback={null}>
           <PerspectiveCamera makeDefault position={[0, 0, 7]} />
           <ambientLight intensity={0.5} color="#FF8C00" />
@@ -273,10 +282,21 @@ export default function GlobeAfrica() {
 
           <OrbitControls
             enablePan={false}
+            enableZoom={true}
+            enableRotate={true}
             minDistance={6}
             maxDistance={12}
-            enableDamping
+            enableDamping={true}
             dampingFactor={0.05}
+            mouseButtons={{
+              LEFT: THREE.MOUSE.ROTATE,
+              MIDDLE: THREE.MOUSE.DOLLY,
+              RIGHT: THREE.MOUSE.PAN,
+            }}
+            touches={{
+              ONE: THREE.TOUCH.ROTATE,
+              TWO: THREE.TOUCH.DOLLY_PAN,
+            }}
           />
         </Suspense>
       </Canvas>
