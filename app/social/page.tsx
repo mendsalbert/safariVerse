@@ -152,6 +152,8 @@ export default function SocialPage() {
                   src={s.img}
                   alt={s.title}
                   fill
+                  unoptimized
+                  priority={false}
                   className="object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
@@ -180,6 +182,7 @@ export default function SocialPage() {
                       src={t.img}
                       alt={t.title}
                       fill
+                      unoptimized
                       className="object-cover"
                     />
                   </div>
@@ -253,6 +256,7 @@ export default function SocialPage() {
                   src={selected.img}
                   alt={selected.title}
                   fill
+                  unoptimized
                   className="object-cover"
                 />
               </div>

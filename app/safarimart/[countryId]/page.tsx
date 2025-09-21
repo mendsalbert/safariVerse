@@ -910,16 +910,7 @@ function Ground() {
   );
 }
 
-// Preload all artifact models
-useGLTF.preload("/artifact/African mask sculpture .glb");
-useGLTF.preload("/artifact/African Women Bust.glb");
-useGLTF.preload("/artifact/Wooden ornament.glb");
-useGLTF.preload("/artifact/African woman wood sculpture .glb");
-useGLTF.preload("/artifact/African Artifact - Yale Art Gallery.glb");
-useGLTF.preload("/artifact/%23Fashion%20Bucket%20Hat%20from%20Africa%20.glb");
-useGLTF.preload("/artifact/Little Succulent Plant.glb");
-useGLTF.preload("/artifact/African Drum.glb");
-useGLTF.preload("/artifact/African Cucumber.glb");
+// Note: Heavy GLB preloads are deferred until the shop opens to avoid blocking navigation
 
 // 3D Artifact Loader Component
 function ArtifactModel({
@@ -1260,6 +1251,30 @@ function VirtualShop({
     totalSales: 0,
     totalRevenue: "0",
   });
+
+  // Defer artifact GLB preloads until the shop is opened at least once
+  const artifactsPreloadedRef = useRef(false);
+  useEffect(() => {
+    if (isOpen && !artifactsPreloadedRef.current) {
+      try {
+        useGLTF.preload("/artifact/African mask sculpture .glb");
+        useGLTF.preload("/artifact/African Women Bust.glb");
+        useGLTF.preload("/artifact/Wooden ornament.glb");
+        useGLTF.preload("/artifact/African woman wood sculpture .glb");
+        useGLTF.preload("/artifact/African Artifact - Yale Art Gallery.glb");
+        useGLTF.preload(
+          "/artifact/%23Fashion%20Bucket%20Hat%20from%20Africa%20.glb"
+        );
+        useGLTF.preload("/artifact/Little Succulent Plant.glb");
+        useGLTF.preload("/artifact/African Drum.glb");
+        useGLTF.preload("/artifact/African Cucumber.glb");
+      } catch (e) {
+        console.warn("Artifact preload failed (non-blocking):", e);
+      } finally {
+        artifactsPreloadedRef.current = true;
+      }
+    }
+  }, [isOpen]);
 
   // Load marketplace data
   useEffect(() => {
