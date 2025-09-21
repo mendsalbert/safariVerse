@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "vercel-build": "npm install --legacy-peer-deps && next build"
   },
   "dependencies": {
     "@babylonjs/core": "^8.27.0",
@@ -76,5 +77,11 @@
     "typescript": "~5.8.0",
     "viem": "^2.37.6"
   },
-  "type": "module"
+  "type": "module",
+  "overrides": {
+    "@nomicfoundation/hardhat-ethers": "3.1.0"
+  },
+  "peerDependencies": {
+    "@nomicfoundation/hardhat-ethers": "3.1.0"
+  }
 }

@@ -8,11 +8,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Optimize for Vercel deployment
-  experimental: {
-    esmExternals: "loose",
-  },
-  // Handle webpack issues with Hardhat
+  // Handle webpack issues with blockchain libraries
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -29,6 +25,8 @@ const nextConfig: NextConfig = {
         assert: false,
         os: false,
         path: false,
+        child_process: false,
+        worker_threads: false,
       };
     }
     return config;
