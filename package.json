@@ -4,10 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "vercel-build": "npm install --legacy-peer-deps && next build"
+    "lint": "eslint"
   },
   "dependencies": {
     "@babylonjs/core": "^8.27.0",
@@ -15,26 +14,17 @@
     "@babylonjs/loaders": "^8.27.0",
     "@hashgraph/proto": "^2.23.0",
     "@hashgraph/sdk": "^2.72.0",
-    "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",
-    "@nomicfoundation/hardhat-ethers": "^3.1.0",
-    "@nomicfoundation/hardhat-network-helpers": "^3.0.0",
-    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
-    "@nomicfoundation/hardhat-verify": "^3.0.2",
     "@rainbow-me/rainbowkit": "^2.2.8",
     "@react-three/drei": "^10.7.6",
     "@react-three/fiber": "^9.3.0",
     "@tanstack/react-query": "^5.89.0",
-    "@typechain/ethers-v6": "^0.5.1",
-    "@typechain/hardhat": "^9.1.0",
     "@types/three": "^0.180.0",
     "babylonjs": "^8.27.0",
-    "chai": "^6.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.2",
     "firebase": "^12.3.0",
     "framer-motion": "^12.23.12",
-    "hardhat-gas-reporter": "^2.3.0",
     "lucide-react": "^0.544.0",
     "next": "15.5.3",
     "pusher": "^5.2.0",
@@ -43,16 +33,25 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-icons": "^5.5.0",
-    "solidity-coverage": "^0.8.16",
     "tailwind-merge": "^3.3.1",
     "thirdweb": "^5.106.0",
     "three": "^0.180.0",
-    "typechain": "^8.3.2",
     "wagmi": "^2.17.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",
+    "@nomicfoundation/hardhat-ethers": "^3.1.0",
+    "@nomicfoundation/hardhat-network-helpers": "^3.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@nomicfoundation/hardhat-verify": "^3.0.2",
     "@nomicfoundation/hardhat-ignition": "^3.0.3",
+    "@typechain/ethers-v6": "^0.5.1",
+    "@typechain/hardhat": "^9.1.0",
+    "chai": "^6.0.1",
+    "hardhat-gas-reporter": "^2.3.0",
+    "solidity-coverage": "^0.8.16",
+    "typechain": "^8.3.2",
     "@nomicfoundation/hardhat-ignition-viem": "^3.0.3",
     "@nomicfoundation/hardhat-keystore": "^3.0.1",
     "@nomicfoundation/hardhat-node-test-runner": "^3.0.3",
@@ -77,11 +76,5 @@
     "typescript": "~5.8.0",
     "viem": "^2.37.6"
   },
-  "type": "module",
-  "overrides": {
-    "@nomicfoundation/hardhat-ethers": "3.1.0"
-  },
-  "peerDependencies": {
-    "@nomicfoundation/hardhat-ethers": "3.1.0"
-  }
+  "type": "module"
 }
