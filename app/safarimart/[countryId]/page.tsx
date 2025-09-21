@@ -33,6 +33,10 @@ import {
   Crown,
   Sparkles,
   Plus,
+  CheckCircle,
+  Package,
+  Download,
+  Share2,
 } from "lucide-react";
 import { WalletProvider, useWallet } from "../../lib/wallet-provider";
 import WalletModal from "../../components/WalletModal";
@@ -1244,6 +1248,12 @@ function VirtualShop({
   const [products, setProducts] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [purchasedProduct, setPurchasedProduct] = useState<ProductData | null>(
+    null
+  );
+  const [transactionHash, setTransactionHash] = useState("");
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const [platformStats, setPlatformStats] = useState({
     totalProducts: 0,
@@ -1384,7 +1394,12 @@ function VirtualShop({
 
       // Purchase the product using SafariMart library
       const result = await purchaseProduct(product.productId);
-      alert(`Purchase successful! Transaction: ${result.txHash}`);
+
+      // Show success modal
+      setPurchasedProduct(product);
+      setTransactionHash(result.txHash);
+      setShowSuccessModal(true);
+
       // Refresh marketplace data
       await loadMarketplaceData();
     } catch (error: any) {
@@ -1448,7 +1463,14 @@ function VirtualShop({
 
       // Clear cart after successful checkout
       setCart([]);
-      alert("Checkout successful! All items have been purchased.");
+
+      // Show success modal for the last item purchased
+      if (cart.length > 0) {
+        const lastItem = cart[cart.length - 1];
+        setPurchasedProduct(lastItem.product);
+        setTransactionHash("Multiple transactions completed");
+        setShowSuccessModal(true);
+      }
 
       // Refresh marketplace data
       await loadMarketplaceData();
@@ -1579,6 +1601,16 @@ function VirtualShop({
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onProductCreated={loadMarketplaceData}
+      />
+
+      {/* Success Modal */}
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        product={purchasedProduct}
+        transactionHash={transactionHash}
+        copySuccess={copySuccess}
+        setCopySuccess={setCopySuccess}
       />
       {/* 3D Shop Environment */}
       <div className="absolute inset-0">
@@ -2786,6 +2818,193 @@ function CreateProductModal({
                 </div>
               )}
             </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Success Modal Component
+function SuccessModal({
+  isOpen,
+  onClose,
+  product,
+  transactionHash,
+  copySuccess,
+  setCopySuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  product: ProductData | null;
+  transactionHash: string;
+  copySuccess: boolean;
+  setCopySuccess: (success: boolean) => void;
+}) {
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShowConfetti(true);
+      // Hide confetti after animation
+      const timer = setTimeout(() => setShowConfetti(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  if (!isOpen || !product) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto">
+      {/* Confetti Effect */}
+      {showConfetti && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {Array.from({ length: 50 }, (_, i) => (
+            <div
+              key={i}
+              className="absolute w-2 h-2 animate-bounce"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                backgroundColor: ["#fbbf24", "#f59e0b", "#d97706", "#b45309"][
+                  Math.floor(Math.random() * 4)
+                ],
+                animationDelay: `${Math.random() * 2}s`,
+                animationDuration: `${2 + Math.random() * 2}s`,
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="relative max-w-2xl w-full mx-4">
+        <div className="bg-black/70 border border-amber-500/30 rounded-2xl overflow-hidden backdrop-blur-lg">
+          {/* Header with Success Icon */}
+          <div className="relative p-8 text-center bg-gradient-to-r from-green-900/40 to-emerald-900/40 border-b border-green-500/30">
+            <div className="relative inline-flex items-center justify-center w-20 h-20 mb-4">
+              {/* Animated Success Circle */}
+              <div className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-20"></div>
+              <div className="relative bg-gradient-to-r from-green-500 to-emerald-500 rounded-full p-4">
+                <CheckCircle className="w-12 h-12 text-white" />
+              </div>
+            </div>
+
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-green-200 via-emerald-200 to-teal-200 bg-clip-text text-transparent mb-2">
+              Purchase Successful!
+            </h2>
+            <p className="text-green-100 text-lg">
+              Your African artifact has been added to your collection
+            </p>
+          </div>
+
+          {/* Product Details */}
+          <div className="p-6">
+            <div className="bg-black/50 border border-amber-500/20 rounded-xl p-6 mb-6">
+              <div className="flex items-start gap-4">
+                {/* Product Icon */}
+                <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl flex items-center justify-center">
+                  <Package className="w-8 h-8 text-white" />
+                </div>
+
+                {/* Product Info */}
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-yellow-100 mb-2">
+                    {product.title}
+                  </h3>
+                  <p className="text-orange-200 text-sm mb-3">
+                    {product.description ||
+                      "A beautiful African cultural artifact"}
+                  </p>
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2 text-amber-300">
+                      <Coins className="w-4 h-4" />
+                      <span className="font-semibold">
+                        {formatPrice(product.price)} HBAR
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-blue-300">
+                      <Sparkles className="w-4 h-4" />
+                      <span className="capitalize">{product.category}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Transaction Details */}
+            <div className="bg-black/50 border border-amber-500/20 rounded-xl p-4 mb-6">
+              <h4 className="text-lg font-semibold text-yellow-100 mb-3 flex items-center gap-2">
+                <Crown className="w-5 h-5 text-amber-400" />
+                Transaction Details
+              </h4>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-orange-200">Transaction Hash:</span>
+                  <span className="text-green-300 font-mono text-sm">
+                    {transactionHash.slice(0, 8)}...{transactionHash.slice(-8)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-orange-200">Status:</span>
+                  <span className="flex items-center gap-2 text-green-300">
+                    <CheckCircle className="w-4 h-4" />
+                    Confirmed
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-orange-200">Network:</span>
+                  <span className="text-blue-300">Hedera Testnet</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(transactionHash);
+                    setCopySuccess(true);
+                    setTimeout(() => setCopySuccess(false), 2000);
+                  } catch (err) {
+                    console.error("Failed to copy:", err);
+                  }
+                }}
+                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-cyan-600 transition-all"
+              >
+                <Share2 className="w-4 h-4" />
+                {copySuccess ? "Copied!" : "Copy Transaction"}
+              </button>
+
+              <button
+                onClick={() => {
+                  // Open Hedera Explorer
+                  window.open(
+                    `https://hashscan.io/testnet/transaction/${transactionHash}`,
+                    "_blank"
+                  );
+                }}
+                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-3 rounded-lg font-semibold hover:from-purple-600 hover:to-pink-600 transition-all"
+              >
+                <Download className="w-4 h-4" />
+                View on Explorer
+              </button>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="p-6 bg-black/40 border-t border-amber-500/20">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-orange-200">
+                Your digital artifact is now safely stored on the blockchain
+              </div>
+              <button
+                onClick={onClose}
+                className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-2 rounded-lg font-semibold hover:from-amber-600 hover:to-orange-600 transition-all"
+              >
+                Continue Shopping
+              </button>
+            </div>
           </div>
         </div>
       </div>

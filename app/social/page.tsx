@@ -10,25 +10,25 @@ type Story = { title: string; img: string; blurb: string };
 const FEATURED_STORIES: Story[] = [
   {
     title: "Nile Civilizations",
-    img: "https://images.unsplash.com/photo-1539650116574-75c0c6d73c6e?w=900&h=600&fit=crop&auto=format",
+    img: "/history/ancient-egypt-scene-mythology-egyptian-600nw-788658802.webp",
     blurb:
       "Along the Nile, knowledge in engineering, astronomy, and governance flourished, shaping world heritage for millennia.",
   },
   {
     title: "Timbuktu Manuscripts",
-    img: "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=900&h=600&fit=crop&auto=format",
+    img: "/history/2_Manuscrit_parchemin_3_det-1024x691.png",
     blurb:
       "Libraries in Timbuktu preserved science, law, and poetry — a beacon of scholarship across the Sahara.",
   },
   {
     title: "Great Zimbabwe",
-    img: "https://images.unsplash.com/photo-1558981033-4a03acb36f87?w=900&h=600&fit=crop&auto=format",
+    img: "/history/Conical_Tower_-_Great_Enclosure_III_(33736918448).jpg",
     blurb:
       "Stone cities rose through trade and craftsmanship, linking inland cultures to the Indian Ocean world.",
   },
   {
     title: "Swahili Coast",
-    img: "https://images.unsplash.com/photo-1545167630-6b3b66e2c62a?w=900&h=600&fit=crop&auto=format",
+    img: "/history/18Swahili-Coast.webp",
     blurb:
       "Maritime towns thrived on trade and language exchange, where Africa met Arabia and Asia.",
   },
@@ -37,25 +37,25 @@ const FEATURED_STORIES: Story[] = [
 const TIMELINE: Story[] = [
   {
     title: "Iron Age Innovation",
-    img: "https://images.unsplash.com/photo-1606636660488-16a8646f08df?w=800&h=500&fit=crop&auto=format",
+    img: "/history/Iron Age Innovation.avif",
     blurb:
       "Early mastery of iron transformed tools, agriculture, and city-building across the continent.",
   },
   {
     title: "Trans‑Saharan Routes",
-    img: "https://images.unsplash.com/photo-1549880181-56a44cf4a9a8?w=800&h=500&fit=crop&auto=format",
+    img: "/history/Trans‑Saharan Routes .png",
     blurb:
       "Caravans exchanged gold, salt, and ideas — forging cultural connections across vast deserts.",
   },
   {
     title: "Scholarly Cities",
-    img: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=800&h=500&fit=crop&auto=format",
+    img: "/history/Scholarly Cities .jpg",
     blurb:
       "Universities and courts fostered jurisprudence, medicine, mathematics, and literature.",
   },
   {
     title: "Diaspora Renaissance",
-    img: "https://images.unsplash.com/photo-1543852786-1cf6624b9987?w=800&h=500&fit=crop&auto=format",
+    img: "/history/Diaspora Renaissance .jpg",
     blurb:
       "Music, art, and tech movements echo across continents, renewing ties to ancestral heritage.",
   },
