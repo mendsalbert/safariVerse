@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 // Routes to prefetch for better performance
 const ROUTES_TO_PREFETCH = [
-  '/game/nigeria',
-  '/nft',
-  '/socialhub',
-  '/gallery',
-  '/social',
-  '/safarimart/nigeria',
-  '/artgallery/nigeria',
-  '/music/nigeria',
+  "/game/nigeria",
+  "/nft",
+  "/socialhub",
+  "/gallery",
+  "/social",
+  "/safarimart/nigeria",
+  "/artgallery/nigeria",
+  "/music/nigeria",
 ];
 
 export default function PerformanceOptimizer() {
@@ -22,17 +22,17 @@ export default function PerformanceOptimizer() {
     // Prefetch critical routes after initial load
     const prefetchRoutes = async () => {
       // Wait for the page to be fully loaded
-      await new Promise(resolve => {
-        if (document.readyState === 'complete') {
+      await new Promise((resolve) => {
+        if (document.readyState === "complete") {
           resolve(void 0);
         } else {
-          window.addEventListener('load', () => resolve(void 0));
+          window.addEventListener("load", () => resolve(void 0));
         }
       });
 
       // Prefetch routes with a slight delay to not interfere with initial page load
       setTimeout(() => {
-        ROUTES_TO_PREFETCH.forEach(route => {
+        ROUTES_TO_PREFETCH.forEach((route) => {
           router.prefetch(route);
         });
       }, 1000);
@@ -45,16 +45,16 @@ export default function PerformanceOptimizer() {
     // Optimize images loading
     const images = document.querySelectorAll('img[loading="lazy"]');
     const imageObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
+      entries.forEach((entry) => {
         if (entry.isIntersecting) {
           const img = entry.target as HTMLImageElement;
-          img.loading = 'eager';
+          img.loading = "eager";
           imageObserver.unobserve(img);
         }
       });
     });
 
-    images.forEach(img => imageObserver.observe(img));
+    images.forEach((img) => imageObserver.observe(img));
 
     return () => imageObserver.disconnect();
   }, []);
