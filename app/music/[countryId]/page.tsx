@@ -409,19 +409,32 @@ function createEmojiTexture(emoji: string) {
   console.log(`Creating texture for emoji: ${emoji}`);
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d");
-  canvas.width = 256;
-  canvas.height = 256;
+  canvas.width = 512; // Higher resolution for crisp emojis
+  canvas.height = 512;
 
   if (context) {
     // Clear canvas with transparent background
     context.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Set up emoji rendering
-    context.font = "180px Arial";
+    // Add a subtle glow effect
+    context.shadowColor = "rgba(255, 255, 255, 0.3)";
+    context.shadowBlur = 20;
+    context.shadowOffsetX = 0;
+    context.shadowOffsetY = 0;
+
+    // Set up emoji rendering with better font
+    context.font =
+      "bold 360px Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif";
     context.textAlign = "center";
     context.textBaseline = "middle";
 
-    // Draw the emoji
+    // Draw the emoji with a subtle outline for better visibility
+    context.strokeStyle = "rgba(0, 0, 0, 0.1)";
+    context.lineWidth = 8;
+    context.strokeText(emoji, canvas.width / 2, canvas.height / 2);
+
+    // Draw the main emoji
+    context.fillStyle = "#ffffff";
     context.fillText(emoji, canvas.width / 2, canvas.height / 2);
 
     console.log(
@@ -431,8 +444,98 @@ function createEmojiTexture(emoji: string) {
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.needsUpdate = true;
-  texture.flipY = false;
+  texture.flipY = true; // Fix upside down emoji
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   return texture;
+}
+
+// Floating emoji reaction component
+function FloatingEmoji({
+  reaction,
+}: {
+  reaction: {
+    id: string;
+    emoji: string;
+    username: string;
+    position: { x: number; y: number; z: number };
+  };
+}) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const [startTime] = useState(Date.now());
+  const [randomSeed] = useState(() => Math.random() * Math.PI * 2);
+
+  const emojiTexture = useMemo(() => {
+    return createEmojiTexture(reaction.emoji);
+  }, [reaction.emoji]);
+
+  useFrame((state) => {
+    if (!meshRef.current) return;
+
+    const elapsed = (Date.now() - startTime) / 1000;
+    const t = state.clock.elapsedTime;
+
+    // Smooth floating motion with gentle curves
+    const floatSpeed = 0.8; // Slower, more graceful
+    const driftAmount = 0.4; // Less aggressive drift
+
+    // Main upward movement with easing
+    const easeOut = 1 - Math.pow(1 - Math.min(elapsed / 4, 1), 3);
+    meshRef.current.position.y = reaction.position.y + easeOut * 6;
+
+    // Gentle swaying motion (like a balloon in wind)
+    const swayX =
+      Math.sin(t * 0.8 + randomSeed) * driftAmount * (1 - elapsed * 0.1);
+    const swayZ =
+      Math.cos(t * 0.6 + randomSeed * 1.3) * driftAmount * (1 - elapsed * 0.1);
+
+    meshRef.current.position.x = reaction.position.x + swayX;
+    meshRef.current.position.z = reaction.position.z + swayZ;
+
+    // Subtle rotation that slows down over time
+    const rotationSpeed = 0.5 * (1 - elapsed * 0.15);
+    meshRef.current.rotation.z = Math.sin(t * rotationSpeed + randomSeed) * 0.3;
+    meshRef.current.rotation.y =
+      Math.cos(t * rotationSpeed * 0.7 + randomSeed) * 0.2;
+
+    // Smooth scale animation with bounce effect
+    const scaleProgress = Math.min(elapsed / 2, 1);
+    const bounce = Math.sin(scaleProgress * Math.PI * 3) * 0.1;
+    const scale = 0.8 + bounce + (1 - scaleProgress) * 0.4;
+    meshRef.current.scale.setScalar(Math.max(0.1, scale));
+
+    // Smooth fade out with delay
+    const fadeStart = 3; // Start fading after 3 seconds
+    const fadeProgress = Math.max(0, (elapsed - fadeStart) / 2);
+    const opacity = Math.max(0, 1 - fadeProgress);
+
+    if (meshRef.current.material && "opacity" in meshRef.current.material) {
+      (meshRef.current.material as any).opacity = opacity;
+    }
+
+    // Add a gentle pulsing glow effect by adjusting opacity slightly
+    const pulse = 1 + Math.sin(t * 2 + randomSeed) * 0.05;
+    if (meshRef.current.material && "opacity" in meshRef.current.material) {
+      const baseOpacity = Math.max(0, 1 - fadeProgress);
+      (meshRef.current.material as any).opacity = baseOpacity * pulse;
+    }
+  });
+
+  return (
+    <mesh
+      ref={meshRef}
+      position={[reaction.position.x, reaction.position.y, reaction.position.z]}
+    >
+      <planeGeometry args={[1.0, 1.0]} />
+      <meshBasicMaterial
+        map={emojiTexture}
+        transparent={true}
+        alphaTest={0.1}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
 }
 
 // Real listener avatar component
@@ -594,9 +697,11 @@ function Crowd({
 function DJWorld({
   bundle,
   listeners,
+  reactions,
 }: {
   bundle: AnalyserBundle;
   listeners: any[];
+  reactions: any[];
 }) {
   return (
     <>
@@ -605,6 +710,12 @@ function DJWorld({
       <Ground />
       <DJStage bundle={bundle} />
       <Crowd bundle={bundle} listeners={listeners} />
+
+      {/* Floating emoji reactions */}
+      {reactions.map((reaction) => (
+        <FloatingEmoji key={reaction.id} reaction={reaction} />
+      ))}
+
       <OrbitControls
         enableDamping
         dampingFactor={0.05}
@@ -624,14 +735,22 @@ export default function MusicStagePage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.7);
-  const [station, setStation] = useState("/radio/radio.mp3");
+  const [station, setStation] = useState(
+    "/api/radio?url=" +
+      encodeURIComponent(
+        "https://hedera-nft-gld.s3.us-east-1.amazonaws.com/radio.mp3"
+      )
+  );
   const [error, setError] = useState<string | null>(null);
   const [isBuffering, setIsBuffering] = useState(false);
   const [streamAttempts, setStreamAttempts] = useState(0);
 
-  // Fallback to Safari Radio only - no external streams
+  // Fallback to Safari Radio via proxy API
   const fallbackStreams = [
-    "/radio/radio.mp3", // Safari Radio - original file
+    "/api/radio?url=" +
+      encodeURIComponent(
+        "https://hedera-nft-gld.s3.us-east-1.amazonaws.com/radio.mp3"
+      ), // Safari Radio - via proxy
   ];
 
   const tryFallbackStream = () => {
@@ -740,7 +859,33 @@ export default function MusicStagePage() {
     const onStalled = () => setIsBuffering(true);
     const onError = (e: any) => {
       setIsBuffering(false);
-      setError("Stream error");
+      console.error("Audio error event:", e);
+
+      // More detailed error reporting
+      const audioEl = e.target as HTMLAudioElement;
+      const error = audioEl.error;
+
+      if (error) {
+        switch (error.code) {
+          case error.MEDIA_ERR_ABORTED:
+            setError("Audio loading was aborted");
+            break;
+          case error.MEDIA_ERR_NETWORK:
+            setError("Network error while loading audio");
+            break;
+          case error.MEDIA_ERR_DECODE:
+            setError("Audio decoding error");
+            break;
+          case error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+            setError("Audio source not supported or CORS blocked");
+            break;
+          default:
+            setError("Unknown audio error");
+        }
+      } else {
+        setError("Stream connection failed");
+      }
+
       // Try fallback stream after a short delay
       setTimeout(() => {
         tryFallbackStream();
@@ -806,6 +951,12 @@ export default function MusicStagePage() {
     try {
       if (!isPlaying) {
         setIsBuffering(true);
+
+        // Try to load the audio first
+        if (el.readyState === 0) {
+          el.load();
+        }
+
         await el.play();
         setIsPlaying(true);
         if (!bundle.analyser) {
@@ -818,8 +969,21 @@ export default function MusicStagePage() {
       }
     } catch (e: any) {
       console.error("Playback error:", e);
-      setError("Failed to start playback (CORS or autoplay blocked)");
+
+      // More specific error handling
+      if (e.name === "NotAllowedError") {
+        setError("Playback blocked by browser. Please click play to start.");
+      } else if (e.name === "NotSupportedError") {
+        setError("Audio format not supported or CORS issue.");
+      } else if (e.name === "AbortError") {
+        setError("Playback was aborted. Trying fallback...");
+        setTimeout(() => tryFallbackStream(), 1000);
+      } else {
+        setError(`Playback failed: ${e.message || "Unknown error"}`);
+      }
+
       setIsBuffering(false);
+      setIsPlaying(false);
     }
   };
 
@@ -831,7 +995,6 @@ export default function MusicStagePage() {
 
     // Handle virtual chunks with start/end times
     if (stationData?.virtual && stationData.startTime !== undefined) {
-      el.src = url;
       setIsBuffering(true);
       setUserSwitches((c) => c + 1);
 
@@ -859,7 +1022,6 @@ export default function MusicStagePage() {
       };
     } else {
       // Regular audio stream
-      el.src = url;
       setIsBuffering(true);
       setUserSwitches((c) => c + 1);
     }
@@ -942,8 +1104,16 @@ export default function MusicStagePage() {
     const safariRadioStation: StationRB = {
       id: "safari-radio-main",
       name: "Safari Radio - Full Experience",
-      url: "/radio/radio.mp3",
-      urlResolved: "/radio/radio.mp3",
+      url:
+        "/api/radio?url=" +
+        encodeURIComponent(
+          "https://hedera-nft-gld.s3.us-east-1.amazonaws.com/radio.mp3"
+        ),
+      urlResolved:
+        "/api/radio?url=" +
+        encodeURIComponent(
+          "https://hedera-nft-gld.s3.us-east-1.amazonaws.com/radio.mp3"
+        ),
       country: "Safari Africa",
       countryCode: "SA",
       tags: ["safari", "african", "music", "radio"],
@@ -960,11 +1130,11 @@ export default function MusicStagePage() {
       chunkIndex: 0,
     };
 
-    // Set the station and start playing immediately
+    // Set the station but don't auto-play (requires user interaction)
     setStations([safariRadioStation]);
     setCurrentStationId(safariRadioStation.id);
     setStation(safariRadioStation.urlResolved);
-    setIsPlaying(true); // Auto-play
+    setIsPlaying(false); // Don't auto-play to avoid browser blocking
     setStationsLoading(false);
   };
 
@@ -1120,6 +1290,24 @@ export default function MusicStagePage() {
     };
   }, []);
 
+  // Sync with Firebase live reactions
+  useEffect(() => {
+    const reactionsRef = ref(database, "liveReactions");
+    const unsubscribe = onValue(reactionsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const reactionsArray = Object.values(data);
+        setLiveReactions(reactionsArray);
+      } else {
+        setLiveReactions([]);
+      }
+    });
+
+    return () => {
+      off(reactionsRef, "value", unsubscribe);
+    };
+  }, []);
+
   return (
     <div className="relative w-full h-screen bg-black">
       {/* Top bar */}
@@ -1153,6 +1341,24 @@ export default function MusicStagePage() {
                 {userCountryEmoji} Tuned In
               </button>
             )}
+
+            {/* Live Emoji Reactions */}
+            {isTunedIn && (
+              <div className="flex items-center gap-1 ml-2">
+                {["❤️", "🔥", "💃", "🎵", "👏", "🙌", "😍", "🎉"].map(
+                  (emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => sendEmojiReaction(emoji)}
+                      className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 text-lg flex items-center justify-center transition-all duration-200 hover:scale-110"
+                      title={`Send ${emoji} reaction`}
+                    >
+                      {emoji}
+                    </button>
+                  )
+                )}
+              </div>
+            )}
           </div>
           {/* Top-left live info based on real data */}
           <div className="w-full mt-2 flex items-center gap-3 text-xs text-white/80">
@@ -1165,7 +1371,11 @@ export default function MusicStagePage() {
 
       {/* 3D World */}
       <Canvas className="w-full h-full">
-        <DJWorld bundle={bundle} listeners={listeners3D} />
+        <DJWorld
+          bundle={bundle}
+          listeners={listeners3D}
+          reactions={liveReactions}
+        />
       </Canvas>
 
       {/* Audio element */}
@@ -1173,7 +1383,8 @@ export default function MusicStagePage() {
         ref={audioRef}
         src={station}
         crossOrigin="anonymous"
-        preload="none"
+        preload="metadata"
+        controls={false}
       />
 
       {/* Controls - Premium Deck */}
