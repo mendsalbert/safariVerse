@@ -8,7 +8,14 @@ import CountryExplorer from "./components/CountryExplorer";
 import LocationChat from "./components/LocationChat";
 import Marketplace from "./components/Marketplace";
 import SocialHub from "./components/SocialHub";
-import { Compass, Gem, Globe2, Image as ImageIcon, Coins } from "lucide-react";
+import {
+  Compass,
+  Gem,
+  Globe2,
+  Image as ImageIcon,
+  Coins,
+  MapIcon,
+} from "lucide-react";
 import Image from "next/image";
 
 interface Country {
@@ -191,7 +198,7 @@ export default function Home() {
               Marketplace NFT
             </button>
             <button
-              onClick={() => router.push("/social")}
+              onClick={() => router.push("/socialhub")}
               className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-lg font-medium hover:from-orange-600 hover:to-amber-600 transition-colors shadow-lg flex items-center justify-center gap-2"
               aria-label="Open Global Social"
             >
@@ -207,12 +214,12 @@ export default function Home() {
               Safari Gallery
             </button>
             <button
-              onClick={() => router.push("/hedera")}
+              onClick={() => router.push("/social")}
               className="w-full bg-gradient-to-r from-teal-500 to-cyan-500 text-white px-4 py-2 rounded-lg font-medium hover:from-teal-600 hover:to-cyan-600 transition-colors shadow-lg flex items-center justify-center gap-2"
               aria-label="Open Hedera Playground"
             >
-              <Coins className="w-5 h-5" />
-              Hedera SDK
+              <MapIcon className="w-5 h-5" />
+              About
             </button>
           </div>
         </div>
