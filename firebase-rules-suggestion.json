@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "tunedInUsers": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["joinedAt", "country", "username"],
+      "$userId": {
+        ".validate": "newData.hasChildren(['id', 'country', 'countryEmoji', 'username', 'joinedAt']) && newData.child('id').val() == $userId && newData.child('joinedAt').isNumber() && newData.child('username').isString() && newData.child('country').isString() && newData.child('countryEmoji').isString()"
+      }
+    }
+  }
+}

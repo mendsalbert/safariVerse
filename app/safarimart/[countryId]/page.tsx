@@ -1377,8 +1377,6 @@ function VirtualShop({
       console.log(`Product ID: ${product.productId}`);
       console.log(`Product name: ${product.title}`);
       console.log(`Product price (BigInt): ${product.price}`);
-      console.log(`Product price (string): ${product.price.toString()}`);
-      console.log(`Product price (hex): 0x${product.price.toString(16)}`);
       console.log(
         `Product price (formatted): ${formatPrice(product.price)} HBAR`
       );

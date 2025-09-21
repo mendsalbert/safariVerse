@@ -48,7 +48,7 @@ export type PurchaseWithProduct = {
 // Contract address - deployed on Hedera Testnet
 export const SAFARIMART_ADDRESS: string =
   process.env.NEXT_PUBLIC_SAFARIMART_ADDRESS ||
-  "0x95b51De4dFD03087E22942c1b2B6D6f7e0b00604"; // Latest deployed
+  "0x4f1266De96BE2B77996019f7061071e151Bc9A94"; // Latest deployed (MVP version)
 
 function getWindowEthereum(): Eip1193Provider {
   if (typeof window === "undefined" || !(window as any).ethereum) {
@@ -67,7 +67,6 @@ export function getReadContract(provider: any): Contract {
   if (!SAFARIMART_ADDRESS) {
     throw new Error("SafariMart contract address not set");
   }
-  console.log(`Using SafariMart contract at: ${SAFARIMART_ADDRESS}`);
   return new Contract(SAFARIMART_ADDRESS, ABI, provider);
 }
 
@@ -167,22 +166,26 @@ export async function purchaseProduct(
   if (paymentEth) {
     value = parseUnits(paymentEth, 18);
   } else {
-    // Use the signer's contract instance to get the most current product data
-    const product = await contract.getProduct(productId);
-    value = BigInt(product.price.toString());
+    try {
+      const product = await contract.getProduct(productId);
+      value = product.price;
+      console.log(
+        `💰 Using product price: ${value.toString()} wei (${formatEther(
+          value
+        )} HBAR)`
+      );
+    } catch (error) {
+      console.warn(
+        "Could not get product price, using 0 value for MVP:",
+        error
+      );
+      value = BigInt(0); // MVP: Allow 0 value transactions
+    }
   }
 
-  console.log(
-    `Purchase debug: productId=${productId}, value=${value}, valueHex=0x${value.toString(
-      16
-    )}`
-  );
+  console.log(`💸 Sending transaction with value: ${value.toString()} wei`);
 
-  // Ensure the value is properly formatted
-  const tx = await contract.purchaseProduct(productId, {
-    value: value,
-    gasLimit: 500000,
-  });
+  const tx = await contract.purchaseProduct(productId, { value });
   const receipt = await tx.wait();
 
   // Extract purchaseId from events
@@ -216,8 +219,7 @@ export async function getProduct(productId: bigint): Promise<ProductData> {
   const contract = getReadContract(provider);
 
   const product = await contract.getProduct(productId);
-  console.log(`Raw product data from contract:`, product);
-  const productData = {
+  return {
     productId: BigInt(product.productId.toString()),
     fileUrl: product.fileUrl,
     title: product.title,
@@ -230,8 +232,6 @@ export async function getProduct(productId: bigint): Promise<ProductData> {
     totalSales: BigInt(product.totalSales.toString()),
     totalRevenue: BigInt(product.totalRevenue.toString()),
   };
-  console.log(`Processed product data:`, productData);
-  return productData;
 }
 
 export async function getAllActiveProducts(): Promise<ProductData[]> {
