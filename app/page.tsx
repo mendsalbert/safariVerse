@@ -8,6 +8,7 @@ import CountryExplorer from "./components/CountryExplorer";
 import LocationChat from "./components/LocationChat";
 import Marketplace from "./components/Marketplace";
 import SocialHub from "./components/SocialHub";
+import PerformanceOptimizer from "./components/PerformanceOptimizer";
 import {
   Compass,
   Gem,
@@ -123,6 +124,7 @@ export default function Home() {
       }`}
       style={{ touchAction: "none" }}
     >
+      <PerformanceOptimizer />
       {/* Sky background with clouds - only show when not on map view */}
       {currentView !== "map" && (
         <div
