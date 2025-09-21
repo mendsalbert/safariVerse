@@ -991,6 +991,7 @@ export default function MusicStagePage() {
     const el = audioRef.current;
     if (!el || !url) return;
 
+    console.log("🎵 Changing station to URL:", url);
     setStation(url);
 
     // Handle virtual chunks with start/end times
@@ -1143,6 +1144,15 @@ export default function MusicStagePage() {
     loadSafariRadio();
   }, []);
 
+  // Handle station URL changes and reload audio element
+  useEffect(() => {
+    const el = audioRef.current;
+    if (el && station) {
+      // Force reload when station changes
+      el.load();
+    }
+  }, [station]);
+
   // Auto-play when station is set and isPlaying is true
   useEffect(() => {
     const el = audioRef.current;
@@ -1223,6 +1233,23 @@ export default function MusicStagePage() {
     }
   };
 
+  // Handle browser back/forward navigation cleanup
+  useEffect(() => {
+    const handlePopState = () => {
+      if (isTunedIn) {
+        console.log("🔌 Browser navigation detected, disconnecting user...");
+        handleTuneOut();
+      }
+    };
+
+    // Listen for browser back/forward button
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [isTunedIn, handleTuneOut]);
+
   const sendEmojiReaction = async (emoji: string) => {
     if (!userId) return;
     try {
@@ -1258,14 +1285,57 @@ export default function MusicStagePage() {
     }
   };
 
-  // Cleanup on unmount
+  // Cleanup on unmount, page unload, or navigation
   useEffect(() => {
-    return () => {
+    const cleanup = async () => {
       if (isTunedIn) {
-        handleTuneOut();
+        try {
+          // Remove user from Firebase Realtime Database
+          const userRef = ref(database, `tunedInUsers/${userId}`);
+          await remove(userRef);
+          console.log("🔌 User disconnected from Safari Radio");
+        } catch (error) {
+          console.error("Error during cleanup:", error);
+        }
       }
     };
-  }, [isTunedIn]);
+
+    // Handle page unload (browser close, refresh, navigation)
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isTunedIn) {
+        // Perform synchronous cleanup for page unload
+        navigator.sendBeacon(
+          "/api/disconnect-user",
+          JSON.stringify({
+            userId,
+            timestamp: Date.now(),
+          })
+        );
+
+        // Also try the direct Firebase cleanup (may not complete)
+        cleanup();
+      }
+    };
+
+    // Handle visibility change (tab switch, minimize)
+    const handleVisibilityChange = () => {
+      if (document.hidden && isTunedIn) {
+        console.log("🔌 Tab hidden, disconnecting user...");
+        cleanup();
+      }
+    };
+
+    // Add event listeners
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Cleanup function for component unmount
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      cleanup();
+    };
+  }, [isTunedIn, userId]);
 
   // Sync Firebase listeners with 3D state
   useEffect(() => {
@@ -1314,7 +1384,13 @@ export default function MusicStagePage() {
       <div className="absolute top-4 left-4 right-4 z-10">
         <div className="flex flex-wrap items-center justify-between gap-3 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl px-4 py-3">
           <button
-            onClick={() => router.back()}
+            onClick={async () => {
+              if (isTunedIn) {
+                console.log("🔌 Back button clicked, disconnecting user...");
+                await handleTuneOut();
+              }
+              router.back();
+            }}
             className="text-sm text-gray-200 hover:text-white"
           >
             ← Back

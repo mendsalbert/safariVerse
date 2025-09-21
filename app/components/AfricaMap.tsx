@@ -45,6 +45,7 @@ interface Country {
   cities: string[];
   description: string;
   coordinates: [number, number][];
+  flag: string;
 }
 
 // Simplified but more realistic country shapes and positions
@@ -66,6 +67,7 @@ const africanCountries: Country[] = [
       [-0.2, 0.7],
       [-0.1, 0.2],
     ],
+    flag: "🇪🇬",
   },
   {
     id: "libya",
@@ -83,6 +85,7 @@ const africanCountries: Country[] = [
       [-0.3, 1],
       [-0.7, 0.3],
     ],
+    flag: "🇱🇾",
   },
   {
     id: "algeria",
@@ -100,6 +103,7 @@ const africanCountries: Country[] = [
       [-0.5, 1.5],
       [-1.2, 0.8],
     ],
+    flag: "🇩🇿",
   },
   {
     id: "morocco",
@@ -117,6 +121,7 @@ const africanCountries: Country[] = [
       [-0.3, 1],
       [-0.6, 0.3],
     ],
+    flag: "🇲🇦",
   },
   {
     id: "nigeria",
@@ -134,6 +139,7 @@ const africanCountries: Country[] = [
       [-0.5, 1],
       [-1, 0.5],
     ],
+    flag: "🇳🇬",
   },
   {
     id: "ghana",
@@ -151,6 +157,7 @@ const africanCountries: Country[] = [
       [-0.2, 0.8],
       [-0.4, 0.3],
     ],
+    flag: "🇬🇭",
   },
   {
     id: "kenya",
@@ -168,6 +175,7 @@ const africanCountries: Country[] = [
       [-0.3, 1.2],
       [-0.6, 0.8],
     ],
+    flag: "🇰🇪",
   },
   {
     id: "ethiopia",
@@ -186,6 +194,7 @@ const africanCountries: Country[] = [
       [-0.5, 1],
       [-0.9, 0.4],
     ],
+    flag: "🇪🇹",
   },
   {
     id: "south-africa",
@@ -203,6 +212,7 @@ const africanCountries: Country[] = [
       [-0.8, 1.2],
       [-1.4, 0.5],
     ],
+    flag: "🇿🇦",
   },
   {
     id: "madagascar",
@@ -220,6 +230,7 @@ const africanCountries: Country[] = [
       [-0.1, 2.2],
       [-0.3, 0.8],
     ],
+    flag: "🇲🇬",
   },
 ];
 
@@ -287,6 +298,24 @@ function CountryMesh({ country, onClick, isSelected }: CountryMeshProps) {
         />
       </mesh>
 
+      {/* Country outline border */}
+      <mesh
+        position={[
+          country.position[0],
+          country.position[1] + 0.001,
+          country.position[2],
+        ]}
+        geometry={geometry}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <meshBasicMaterial
+          color="#8B4513"
+          wireframe={true}
+          transparent={true}
+          opacity={0.8}
+        />
+      </mesh>
+
       {(hovered || isSelected) && (
         <Html
           position={[
@@ -298,10 +327,9 @@ function CountryMesh({ country, onClick, isSelected }: CountryMeshProps) {
         >
           <div className="bg-gradient-to-br from-orange-900/95 via-red-900/95 to-amber-900/95 backdrop-blur-xl text-white p-5 rounded-2xl shadow-2xl min-w-[320px] pointer-events-none border-2 border-orange-400/60">
             <div className="flex items-center gap-4 mb-4">
-              <div
-                className="w-14 h-10 rounded-lg shadow-lg border-2 border-orange-300/50"
-                style={{ backgroundColor: country.color }}
-              ></div>
+              <div className="w-14 h-10 rounded-lg shadow-lg border-2 border-orange-300/50 bg-white flex items-center justify-center text-2xl">
+                {country.flag}
+              </div>
               <div>
                 <h3 className="font-bold text-2xl text-orange-100">
                   {country.name}
@@ -621,7 +649,6 @@ export default function AfricaMap({ onCountrySelect }: AfricaMapProps) {
             factor={4}
             saturation={1.2}
             fade
-            color="#FFD700"
           />
 
           {/* Sunset Environment */}

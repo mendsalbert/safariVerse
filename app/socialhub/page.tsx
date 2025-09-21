@@ -11,6 +11,16 @@ import {
 import { useRef, useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import * as THREE from "three";
+import { database } from "../../lib/firebase";
+import {
+  ref,
+  set,
+  remove,
+  serverTimestamp,
+  onValue,
+  off,
+  push,
+} from "firebase/database";
 import {
   ArrowLeft,
   Send,
@@ -35,9 +45,10 @@ interface ChatMessage {
   id: string;
   username: string;
   message: string;
-  timestamp: Date;
+  timestamp: number;
   avatar: string;
   color: string;
+  userId: string;
 }
 
 interface User {
@@ -47,6 +58,16 @@ interface User {
   color: string;
   position: [number, number, number];
   isOnline: boolean;
+  joinedAt: number;
+  lastSeen: number;
+}
+
+interface UserProfile {
+  id: string;
+  username: string;
+  avatar: string;
+  color: string;
+  joinedAt: number;
 }
 
 // Simple loading overlay
@@ -680,20 +701,290 @@ function Ground() {
   );
 }
 
+// User Profile Setup Component
+function UserProfileSetup({
+  onProfileComplete,
+  onClose,
+  currentUser,
+}: {
+  onProfileComplete: (profile: {
+    username: string;
+    avatar: string;
+    color: string;
+  }) => void;
+  onClose: () => void;
+  currentUser: UserProfile | null;
+}) {
+  const [username, setUsername] = useState("");
+  const [selectedAvatar, setSelectedAvatar] = useState("🦁");
+  const [selectedColor, setSelectedColor] = useState("#f59e0b");
+
+  // Load saved profile on component mount
+  useEffect(() => {
+    const savedProfile = localStorage.getItem("safariChatProfile");
+    if (savedProfile) {
+      try {
+        const profile = JSON.parse(savedProfile);
+        setUsername(profile.username || "");
+        setSelectedAvatar(profile.avatar || "🦁");
+        setSelectedColor(profile.color || "#f59e0b");
+      } catch (error) {
+        console.error("Failed to load saved profile:", error);
+        // Clear invalid data
+        localStorage.removeItem("safariChatProfile");
+      }
+    }
+  }, []);
+
+  const avatarOptions = [
+    "🦁",
+    "🐘",
+    "🦒",
+    "🦓",
+    "🦏",
+    "🐆",
+    "🦌",
+    "🐃",
+    "🦅",
+    "🦜",
+    "🦩",
+    "🐊",
+    "🐍",
+    "🦎",
+    "🐢",
+    "🦗",
+    "🌍",
+    "🌿",
+    "🌳",
+    "🌺",
+    "🍃",
+    "⭐",
+    "🔥",
+    "💫",
+  ];
+
+  const colorOptions = [
+    "#f59e0b",
+    "#10b981",
+    "#8b5cf6",
+    "#ef4444",
+    "#06b6d4",
+    "#84cc16",
+    "#f97316",
+    "#ec4899",
+    "#6366f1",
+    "#14b8a6",
+  ];
+
+  const handleSubmit = () => {
+    if (username.trim().length < 2) {
+      alert("Username must be at least 2 characters long");
+      return;
+    }
+    if (username.trim().length > 20) {
+      alert("Username must be less than 20 characters");
+      return;
+    }
+
+    const profile = {
+      username: username.trim(),
+      avatar: selectedAvatar,
+      color: selectedColor,
+    };
+
+    // Save profile to localStorage
+    localStorage.setItem("safariChatProfile", JSON.stringify(profile));
+
+    onProfileComplete(profile);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+      <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl border border-amber-400/40 w-full max-w-2xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="relative bg-gradient-to-r from-amber-600 via-orange-500 to-red-500 p-6">
+          <div className="absolute inset-0 bg-black/20"></div>
+          <div className="relative flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-full backdrop-blur-sm">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white">
+                  {currentUser ? "Edit Profile" : "Join Safari Chat"}
+                </h2>
+                <p className="text-white/90 text-sm">
+                  {currentUser
+                    ? "Update your explorer profile"
+                    : "Create your explorer profile"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {currentUser && (
+                <button
+                  onClick={() => {
+                    if (
+                      confirm(
+                        "Clear your saved profile? You'll need to create a new one next time."
+                      )
+                    ) {
+                      localStorage.removeItem("safariChatProfile");
+                      alert(
+                        "Profile cleared! You can create a new one next time."
+                      );
+                    }
+                  }}
+                  className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-all duration-300 backdrop-blur-sm"
+                  title="Clear saved profile"
+                >
+                  <Settings className="w-4 h-4 text-white" />
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="bg-white/20 hover:bg-white/30 p-2 rounded-full transition-all duration-300 backdrop-blur-sm"
+              >
+                <svg
+                  className="w-5 h-5 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Form Content */}
+        <div className="p-6 space-y-6">
+          {/* Username Input */}
+          <div>
+            <label className="block text-sm font-semibold text-amber-300 mb-2">
+              Explorer Name
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter your safari name..."
+              maxLength={20}
+              className="w-full bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-600/50 rounded-xl p-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400/50 transition-all duration-300"
+              autoFocus
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              {username.length}/20 characters
+            </p>
+          </div>
+
+          {/* Avatar and Color Selection in a row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Avatar Selection */}
+            <div>
+              <label className="block text-sm font-semibold text-amber-300 mb-3">
+                Choose Your Avatar
+              </label>
+              <div className="grid grid-cols-6 gap-2">
+                {avatarOptions.map((avatar) => (
+                  <button
+                    key={avatar}
+                    onClick={() => setSelectedAvatar(avatar)}
+                    className={`w-12 h-12 rounded-lg text-xl flex items-center justify-center transition-all duration-200 ${
+                      selectedAvatar === avatar
+                        ? "bg-amber-500/30 border-2 border-amber-400 scale-110"
+                        : "bg-slate-700/50 border border-slate-600/30 hover:bg-slate-600/50 hover:scale-105"
+                    }`}
+                  >
+                    {avatar}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Color Selection */}
+            <div>
+              <label className="block text-sm font-semibold text-amber-300 mb-3">
+                Choose Your Color
+              </label>
+              <div className="grid grid-cols-5 gap-3">
+                {colorOptions.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => setSelectedColor(color)}
+                    className={`w-12 h-12 rounded-full transition-all duration-200 ${
+                      selectedColor === color
+                        ? "ring-2 ring-white ring-offset-2 ring-offset-gray-800 scale-110"
+                        : "hover:scale-105"
+                    }`}
+                    style={{ backgroundColor: color }}
+                    title={color}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Preview */}
+          <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-600/30">
+            <p className="text-sm text-gray-300 mb-3">Profile Preview:</p>
+            <div className="flex items-center gap-4">
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-lg"
+                style={{ backgroundColor: selectedColor }}
+              >
+                {selectedAvatar}
+              </div>
+              <div>
+                <div className="font-semibold text-white text-lg">
+                  {username || "Your Name"}
+                </div>
+                <div className="text-sm text-gray-400">Safari Explorer</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Ready to join the adventure!
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            onClick={handleSubmit}
+            disabled={username.trim().length < 2}
+            className="w-full bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 hover:from-amber-400 hover:via-orange-400 hover:to-red-400 disabled:from-gray-600 disabled:to-gray-700 text-white py-4 rounded-xl transition-all duration-300 disabled:cursor-not-allowed shadow-lg hover:shadow-xl disabled:opacity-50 font-semibold flex items-center justify-center gap-2 text-lg"
+          >
+            <MessageCircle className="w-6 h-6" />
+            {currentUser ? "Update Profile" : "Join Safari Chat"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Chat System Component
 function ChatSystem({
   isOpen,
   onClose,
   messages,
   onSendMessage,
+  currentUser,
+  onlineUsers,
 }: {
   isOpen: boolean;
   onClose: () => void;
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
+  currentUser: UserProfile | null;
+  onlineUsers: UserProfile[];
 }) {
   const [inputMessage, setInputMessage] = useState("");
-  const [username] = useState("Explorer" + Math.floor(Math.random() * 1000));
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -705,7 +996,7 @@ function ChatSystem({
   }, [messages]);
 
   const handleSend = () => {
-    if (inputMessage.trim()) {
+    if (inputMessage.trim() && currentUser) {
       onSendMessage(inputMessage);
       setInputMessage("");
     }
@@ -737,64 +1028,139 @@ function ChatSystem({
                 </h2>
                 <div className="flex items-center gap-2 text-white/90 text-sm">
                   <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
-                  <span>
-                    {Math.floor(Math.random() * 50) + 10} adventurers online
-                  </span>
+                  <span>{onlineUsers.length} adventurers online</span>
+                  {currentUser && (
+                    <div className="flex items-center gap-1 ml-2 px-2 py-1 bg-green-500/20 rounded-full">
+                      <div
+                        className="w-3 h-3 rounded-full text-xs flex items-center justify-center"
+                        style={{ backgroundColor: currentUser.color }}
+                      >
+                        {currentUser.avatar}
+                      </div>
+                      <span className="text-xs text-green-300">
+                        {currentUser.username}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="bg-white/20 hover:bg-white/30 p-2 rounded-full transition-all duration-300 backdrop-blur-sm"
-            >
-              <svg
-                className="w-6 h-6 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            <div className="flex items-center gap-2">
+              {currentUser && (
+                <button
+                  onClick={() => {
+                    if (
+                      confirm(
+                        "Edit your profile? This will open the profile setup again."
+                      )
+                    ) {
+                      onClose();
+                      // Trigger profile setup modal
+                      setTimeout(() => {
+                        const event = new CustomEvent("openProfileSetup");
+                        window.dispatchEvent(event);
+                      }, 100);
+                    }
+                  }}
+                  className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-all duration-300 backdrop-blur-sm"
+                  title="Edit Profile"
+                >
+                  <Settings className="w-5 h-5 text-white" />
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="bg-white/20 hover:bg-white/30 p-2 rounded-full transition-all duration-300 backdrop-blur-sm"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Messages Area with Custom Scrollbar */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-gray-900/50 to-gray-800/50 custom-scrollbar">
-          {messages.map((msg, index) => (
-            <div key={msg.id} className="flex items-start gap-4 group">
-              <div className="relative">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold shadow-lg ring-2 ring-white/20"
-                  style={{ backgroundColor: msg.color }}
-                >
-                  {msg.username[0]}
-                </div>
-                {/* Online indicator for active users */}
-                {index < 3 && (
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-gray-900 shadow-lg"></div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="font-bold text-amber-300 text-lg">
-                    {msg.username}
-                  </span>
-                  <span className="text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded-full">
-                    {msg.timestamp.toLocaleTimeString()}
-                  </span>
-                </div>
-                <div className="bg-gradient-to-br from-slate-700/80 to-slate-800/80 backdrop-blur-sm rounded-2xl p-4 text-gray-100 shadow-lg border border-slate-600/30 group-hover:border-amber-400/30 transition-all duration-300">
-                  {msg.message}
-                </div>
-              </div>
+          {messages.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">💬</div>
+              <h3 className="text-xl font-semibold text-white mb-2">
+                Welcome to Safari Chat!
+              </h3>
+              <p className="text-gray-400">
+                Be the first to start a conversation with fellow explorers.
+              </p>
             </div>
-          ))}
+          ) : (
+            messages.map((msg) => {
+              const isCurrentUser =
+                currentUser && msg.userId === currentUser.id;
+              const userOnline = onlineUsers.some((u) => u.id === msg.userId);
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex items-start gap-4 group ${
+                    isCurrentUser ? "flex-row-reverse" : ""
+                  }`}
+                >
+                  <div className="relative flex-shrink-0">
+                    <div
+                      className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold shadow-lg ring-2 ring-white/20"
+                      style={{ backgroundColor: msg.color }}
+                    >
+                      {msg.avatar}
+                    </div>
+                    {/* Online indicator */}
+                    {userOnline && (
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-gray-900 shadow-lg"></div>
+                    )}
+                  </div>
+                  <div
+                    className={`flex-1 min-w-0 ${
+                      isCurrentUser ? "text-right" : ""
+                    }`}
+                  >
+                    <div
+                      className={`flex items-center gap-3 mb-2 ${
+                        isCurrentUser ? "flex-row-reverse" : ""
+                      }`}
+                    >
+                      <span
+                        className={`font-bold text-lg ${
+                          isCurrentUser ? "text-blue-300" : "text-amber-300"
+                        }`}
+                      >
+                        {isCurrentUser ? "You" : msg.username}
+                      </span>
+                      <span className="text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded-full">
+                        {new Date(msg.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <div
+                      className={`bg-gradient-to-br backdrop-blur-sm rounded-2xl p-4 text-gray-100 shadow-lg border transition-all duration-300 ${
+                        isCurrentUser
+                          ? "from-blue-700/80 to-blue-800/80 border-blue-600/30 group-hover:border-blue-400/30 ml-8"
+                          : "from-slate-700/80 to-slate-800/80 border-slate-600/30 group-hover:border-amber-400/30 mr-8"
+                      }`}
+                    >
+                      {msg.message}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
           <div ref={messagesEndRef} />
         </div>
 
@@ -826,24 +1192,38 @@ function ChatSystem({
 
             {/* Action buttons row */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-4 py-2 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-xl text-sm">
-                  <Smile className="w-4 h-4" />
-                  😊
-                </button>
-                <button className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white px-4 py-2 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-xl text-sm">
-                  <Gift className="w-4 h-4" />
-                  GIF
-                </button>
-                <button className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-4 py-2 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-xl text-sm">
-                  <Camera className="w-4 h-4" />
-                  Photo
-                </button>
+              <div className="flex items-center gap-2">
+                {/* Quick Emoji Reactions */}
+                {["😊", "😂", "❤️", "👏", "🔥", "🎉", "🦁", "🌍"].map(
+                  (emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => {
+                        setInputMessage((prev) => prev + emoji);
+                      }}
+                      className="bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500 hover:to-pink-500 text-white px-3 py-2 rounded-xl transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-xl text-lg hover:scale-105"
+                      title={`Add ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  )
+                )}
               </div>
-              <div className="text-xs text-gray-400 flex items-center gap-2">
-                <span>Press Enter to send</span>
-                <span className="text-gray-500">•</span>
-                <span>Shift+Enter for new line</span>
+              <div className="text-xs text-gray-400 flex items-center gap-4">
+                <span>Press Enter to send • Shift+Enter for new line</span>
+                {currentUser && (
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-4 h-4 rounded-full text-xs flex items-center justify-center"
+                      style={{ backgroundColor: currentUser.color }}
+                    >
+                      {currentUser.avatar}
+                    </div>
+                    <span className="text-amber-300">
+                      {currentUser.username}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1143,34 +1523,61 @@ export default function SocialHubPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [hoveredUser, setHoveredUser] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "1",
-      username: "SafariGuide",
-      message:
-        "Welcome to the Social Hub! Feel free to explore and connect with other adventurers.",
-      timestamp: new Date(Date.now() - 300000),
-      avatar: "🦁",
-      color: "#f59e0b",
-    },
-    {
-      id: "2",
-      username: "Explorer42",
-      message:
-        "This virtual world is amazing! Love the African-inspired design.",
-      timestamp: new Date(Date.now() - 120000),
-      avatar: "🌍",
-      color: "#10b981",
-    },
-    {
-      id: "3",
-      username: "AdventureSeeker",
-      message: "Anyone up for exploring the game area together?",
-      timestamp: new Date(Date.now() - 60000),
-      avatar: "🎮",
-      color: "#8b5cf6",
-    },
-  ]);
+
+  // Firebase Chat State
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [onlineUsers, setOnlineUsers] = useState<UserProfile[]>([]);
+  const [showProfileSetup, setShowProfileSetup] = useState(false);
+  const [userId] = useState(
+    () => `user_${Math.random().toString(36).substr(2, 9)}`
+  );
+
+  // Auto-load saved profile on component mount
+  useEffect(() => {
+    const savedProfile = localStorage.getItem("safariChatProfile");
+    if (savedProfile) {
+      try {
+        const profile = JSON.parse(savedProfile);
+        const userProfile: UserProfile = {
+          id: userId,
+          username: profile.username,
+          avatar: profile.avatar,
+          color: profile.color,
+          joinedAt: Date.now(),
+        };
+
+        // Auto-join with saved profile
+        setCurrentUser(userProfile);
+
+        // Add user to Firebase
+        const userRef = ref(database, `socialHubUsers/${userId}`);
+        set(userRef, {
+          ...userProfile,
+          lastSeen: Date.now(),
+        }).catch((error) => {
+          console.error("Failed to auto-join with saved profile:", error);
+        });
+
+        console.log("🔄 Auto-loaded saved profile:", profile.username);
+      } catch (error) {
+        console.error("Failed to load saved profile:", error);
+        localStorage.removeItem("safariChatProfile");
+      }
+    }
+  }, [userId]);
+
+  // Listen for profile edit events
+  useEffect(() => {
+    const handleOpenProfileSetup = () => {
+      setShowProfileSetup(true);
+    };
+
+    window.addEventListener("openProfileSetup", handleOpenProfileSetup);
+    return () => {
+      window.removeEventListener("openProfileSetup", handleOpenProfileSetup);
+    };
+  }, []);
 
   // Mock users
   const [users] = useState<User[]>([
@@ -1224,16 +1631,95 @@ export default function SocialHubPage() {
     },
   ]);
 
-  const handleSendMessage = (message: string) => {
-    const newMessage: ChatMessage = {
-      id: Date.now().toString(),
-      username: "You",
-      message,
-      timestamp: new Date(),
-      avatar: "👤",
-      color: "#3b82f6",
-    };
-    setMessages((prev) => [...prev, newMessage]);
+  const handleSendMessage = async (message: string) => {
+    if (!currentUser || !message.trim()) return;
+
+    try {
+      const messagesRef = ref(database, "socialHubMessages");
+      const newMessageRef = push(messagesRef);
+
+      const messageData: Omit<ChatMessage, "id"> = {
+        username: currentUser.username,
+        message: message.trim(),
+        timestamp: Date.now(),
+        avatar: currentUser.avatar,
+        color: currentUser.color,
+        userId: currentUser.id,
+      };
+
+      await set(newMessageRef, messageData);
+
+      // Update user's last activity
+      const userRef = ref(database, `socialHubUsers/${userId}`);
+      await set(userRef, {
+        ...currentUser,
+        lastSeen: Date.now(),
+      });
+    } catch (error) {
+      console.error("Failed to send message:", error);
+      alert("Failed to send message. Please try again.");
+    }
+  };
+
+  const handleProfileComplete = async (profile: {
+    username: string;
+    avatar: string;
+    color: string;
+  }) => {
+    try {
+      const isNewUser = !currentUser;
+      const userProfile: UserProfile = {
+        id: userId,
+        username: profile.username,
+        avatar: profile.avatar,
+        color: profile.color,
+        joinedAt: isNewUser ? Date.now() : currentUser?.joinedAt || Date.now(),
+      };
+
+      // Add/Update user in Firebase
+      const userRef = ref(database, `socialHubUsers/${userId}`);
+      await set(userRef, {
+        ...userProfile,
+        lastSeen: Date.now(),
+      });
+
+      setCurrentUser(userProfile);
+      setShowProfileSetup(false);
+
+      // Send welcome message only for new users
+      if (isNewUser) {
+        setTimeout(() => {
+          handleSendMessage(
+            `👋 Hello everyone! I just joined the Safari Social Hub!`
+          );
+        }, 1000);
+      } else {
+        // Send profile update message
+        setTimeout(() => {
+          handleSendMessage(
+            `🔄 Updated my profile! I'm now ${profile.username} ${profile.avatar}`
+          );
+        }, 500);
+      }
+    } catch (error) {
+      console.error("Failed to create/update profile:", error);
+      alert("Failed to save profile. Please try again.");
+    }
+  };
+
+  const handleLeaveChat = async () => {
+    if (!currentUser) return;
+
+    try {
+      // Remove user from Firebase
+      const userRef = ref(database, `socialHubUsers/${userId}`);
+      await remove(userRef);
+
+      setCurrentUser(null);
+      setIsChatOpen(false);
+    } catch (error) {
+      console.error("Failed to leave chat:", error);
+    }
   };
 
   const handleUserClick = (user: User) => {
@@ -1241,7 +1727,11 @@ export default function SocialHubPage() {
   };
 
   const handleChatEnter = () => {
-    setIsChatOpen(true);
+    if (currentUser) {
+      setIsChatOpen(true);
+    } else {
+      setShowProfileSetup(true);
+    }
   };
 
   const handleGameEnter = () => {
@@ -1274,10 +1764,131 @@ export default function SocialHubPage() {
     }, 1000);
   };
 
+  // Firebase listeners for real-time updates
+  useEffect(() => {
+    // Listen to messages
+    const messagesRef = ref(database, "socialHubMessages");
+    const unsubscribeMessages = onValue(messagesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const messagesArray = Object.entries(data).map(([id, messageData]) => ({
+          id,
+          ...(messageData as Omit<ChatMessage, "id">),
+        }));
+        // Sort by timestamp and limit to last 100 messages
+        const sortedMessages = messagesArray
+          .sort((a, b) => a.timestamp - b.timestamp)
+          .slice(-100);
+        setMessages(sortedMessages);
+      } else {
+        setMessages([]);
+      }
+    });
+
+    // Listen to online users
+    const usersRef = ref(database, "socialHubUsers");
+    const unsubscribeUsers = onValue(usersRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const usersArray = Object.values(data) as UserProfile[];
+        // Consider users online if they were active in the last 5 minutes
+        const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+        const activeUsers = usersArray.filter(
+          (user) => user.lastSeen > fiveMinutesAgo
+        );
+        setOnlineUsers(activeUsers);
+      } else {
+        setOnlineUsers([]);
+      }
+    });
+
+    return () => {
+      off(messagesRef, "value", unsubscribeMessages);
+      off(usersRef, "value", unsubscribeUsers);
+    };
+  }, []);
+
+  // Update user's last seen timestamp periodically
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const updateLastSeen = async () => {
+      try {
+        const userRef = ref(database, `socialHubUsers/${userId}`);
+        await set(userRef, {
+          ...currentUser,
+          lastSeen: Date.now(),
+        });
+      } catch (error) {
+        console.error("Failed to update last seen:", error);
+      }
+    };
+
+    // Update immediately
+    updateLastSeen();
+
+    // Update every minute
+    const interval = setInterval(updateLastSeen, 60000);
+
+    return () => clearInterval(interval);
+  }, [currentUser, userId]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    const cleanup = async () => {
+      if (currentUser) {
+        try {
+          const userRef = ref(database, `socialHubUsers/${userId}`);
+          await remove(userRef);
+        } catch (error) {
+          console.error("Error during cleanup:", error);
+        }
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (currentUser) {
+        // Use sendBeacon for reliable cleanup on page unload
+        navigator.sendBeacon(
+          "/api/disconnect-user",
+          JSON.stringify({
+            userId,
+            type: "socialHub",
+            timestamp: Date.now(),
+          })
+        );
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && currentUser) {
+        cleanup();
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      cleanup();
+    };
+  }, [currentUser, userId]);
+
   return (
     <div className="w-full h-screen relative bg-gradient-to-b from-blue-900 via-indigo-800 to-purple-900">
       {/* Loading Overlay */}
       {isLoading && <LoadingOverlay text="Loading activity..." />}
+
+      {/* Profile Setup Modal */}
+      {showProfileSetup && (
+        <UserProfileSetup
+          onProfileComplete={handleProfileComplete}
+          onClose={() => setShowProfileSetup(false)}
+          currentUser={currentUser}
+        />
+      )}
 
       {/* Chat System */}
       <ChatSystem
@@ -1285,6 +1896,8 @@ export default function SocialHubPage() {
         onClose={() => setIsChatOpen(false)}
         messages={messages}
         onSendMessage={handleSendMessage}
+        currentUser={currentUser}
+        onlineUsers={onlineUsers}
       />
 
       {/* 3D Social Hub Environment */}
@@ -1310,12 +1923,17 @@ export default function SocialHubPage() {
 
       {/* UI Overlay */}
       <SocialHubUI
-        onBack={() => router.back()}
+        onBack={async () => {
+          if (currentUser) {
+            await handleLeaveChat();
+          }
+          router.back();
+        }}
         controlMode={controlMode}
         setControlMode={setControlMode}
         isMuted={isMuted}
         setIsMuted={setIsMuted}
-        onlineUsers={users.filter((u) => u.isOnline).length}
+        onlineUsers={onlineUsers.length}
         selectedUser={selectedUser}
         setSelectedUser={setSelectedUser}
       />

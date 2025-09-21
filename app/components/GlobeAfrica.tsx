@@ -28,25 +28,49 @@ interface CountryMarker {
   lat: number;
   lng: number;
   color: string;
+  flag: string;
 }
 
 const africanTop10: CountryMarker[] = [
-  { id: "nigeria", name: "Nigeria", lat: 9.082, lng: 8.675, color: "#22c55e" },
-  { id: "ghana", name: "Ghana", lat: 7.946, lng: -1.023, color: "#eab308" },
+  {
+    id: "nigeria",
+    name: "Nigeria",
+    lat: 9.082,
+    lng: 8.675,
+    color: "#22c55e",
+    flag: "🇳🇬",
+  },
+  {
+    id: "ghana",
+    name: "Ghana",
+    lat: 7.946,
+    lng: -1.023,
+    color: "#eab308",
+    flag: "🇬🇭",
+  },
   {
     id: "ethiopia",
     name: "Ethiopia",
     lat: 9.145,
     lng: 40.489,
     color: "#84cc16",
+    flag: "🇪🇹",
   },
-  { id: "egypt", name: "Egypt", lat: 26.82, lng: 30.802, color: "#f59e0b" },
+  {
+    id: "egypt",
+    name: "Egypt",
+    lat: 26.82,
+    lng: 30.802,
+    color: "#f59e0b",
+    flag: "🇪🇬",
+  },
   {
     id: "dr-congo",
     name: "DR Congo",
     lat: -4.038,
     lng: 21.758,
     color: "#ef4444",
+    flag: "🇨🇩",
   },
   {
     id: "tanzania",
@@ -54,6 +78,7 @@ const africanTop10: CountryMarker[] = [
     lat: -6.369,
     lng: 34.888,
     color: "#06b6d4",
+    flag: "🇹🇿",
   },
   {
     id: "south-africa",
@@ -61,17 +86,40 @@ const africanTop10: CountryMarker[] = [
     lat: -30.559,
     lng: 22.937,
     color: "#f97316",
+    flag: "🇿🇦",
   },
-  { id: "kenya", name: "Kenya", lat: -0.0236, lng: 37.906, color: "#dc2626" },
-  { id: "uganda", name: "Uganda", lat: 1.3733, lng: 32.2903, color: "#eab308" },
+  {
+    id: "kenya",
+    name: "Kenya",
+    lat: -0.0236,
+    lng: 37.906,
+    color: "#dc2626",
+    flag: "🇰🇪",
+  },
+  {
+    id: "uganda",
+    name: "Uganda",
+    lat: 1.3733,
+    lng: 32.2903,
+    color: "#eab308",
+    flag: "🇺🇬",
+  },
   {
     id: "algeria",
     name: "Algeria",
     lat: 28.0339,
     lng: 1.6596,
     color: "#a855f7",
+    flag: "🇩🇿",
   },
-  { id: "sudan", name: "Sudan", lat: 12.8628, lng: 30.2176, color: "#f43f5e" },
+  {
+    id: "sudan",
+    name: "Sudan",
+    lat: 12.8628,
+    lng: 30.2176,
+    color: "#f43f5e",
+    flag: "🇸🇩",
+  },
 ];
 
 function latLngToVector3(
@@ -103,6 +151,18 @@ function CountryPin({
 
   return (
     <group position={pos.toArray()}>
+      {/* Country outline glow */}
+      <mesh position={[0, 0, 0]}>
+        <sphereGeometry args={[0.02, 16, 16]} />
+        <meshStandardMaterial
+          color={country.color}
+          transparent
+          opacity={hovered ? 0.6 : 0.3}
+          emissive={country.color}
+          emissiveIntensity={hovered ? 0.8 : 0.4}
+        />
+      </mesh>
+
       <Html distanceFactor={10} center>
         <div
           onMouseEnter={() => setHovered(true)}
@@ -115,17 +175,17 @@ function CountryPin({
           }}
           role="button"
           tabIndex={0}
-          className="flex items-center justify-center cursor-pointer"
+          className="flex items-center justify-center cursor-pointer w-8 h-6 bg-gradient-to-br from-orange-800/90 to-red-700/90 rounded-md shadow-lg border border-orange-500/70 backdrop-blur-sm"
           style={{ pointerEvents: "auto" }}
         >
-          <MapPin className="w-4 h-4" style={{ color: "#ffffff" }} />
+          <span className="text-lg">{country.flag}</span>
         </div>
       </Html>
 
       {hovered && (
         <Html distanceFactor={10} center position={[0, 0.2, 0]}>
           <div
-            className="px-2 py-1 rounded-md text-xs text-white bg-black/80 border border-white/20 whitespace-nowrap cursor-pointer"
+            className="px-3 py-2 rounded-lg text-sm text-white bg-gradient-to-br from-orange-950/95 via-red-900/95 to-amber-950/95 border border-orange-500/70 whitespace-nowrap cursor-pointer flex items-center gap-2 shadow-lg backdrop-blur-sm"
             role="button"
             tabIndex={0}
             onClick={() => router.push(`/country/${country.id}`)}
@@ -136,7 +196,8 @@ function CountryPin({
             }}
             style={{ pointerEvents: "auto" }}
           >
-            {country.name}
+            <span className="text-base">{country.flag}</span>
+            <span>{country.name}</span>
           </div>
         </Html>
       )}
@@ -254,7 +315,7 @@ export default function GlobeAfrica() {
         style={{ touchAction: "none" }}
         gl={{
           antialias: true,
-          alpha: false,
+          alpha: true,
           powerPreference: "high-performance",
         }}
       >

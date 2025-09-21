@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   MapPin,
@@ -14,6 +14,8 @@ import {
   ShoppingCart,
 } from "lucide-react";
 
+// Using local images - no API calls needed
+
 const factsData: Record<
   string,
   {
@@ -21,8 +23,9 @@ const factsData: Record<
     capital: string;
     foods: string[];
     languages: string[];
-    spots: { name: string; img: string }[];
+    spots: { name: string; img: string; localImg: string }[];
     blurb: string;
+    foodImages: string[];
   }
 > = {
   nigeria: {
@@ -34,18 +37,27 @@ const factsData: Record<
       {
         name: "Zuma Rock",
         img: "/nigeria/zuma-rock.jpg",
+        localImg: "/countries/nigeria/Zuma_Rock.jpg",
       },
       {
         name: "Lekki-Ikoyi Bridge",
         img: "/nigeria/lekki-ikoyi.jpg",
+        localImg:
+          "/countries/nigeria/csm_img2_Projects_Bridge_2_1e9359504f.jpg",
       },
       {
         name: "Olumo Rock",
         img: "/nigeria/olumorock.jpg",
+        localImg: "/countries/nigeria/Olumo-Rock-Nigeria.jpg",
       },
     ],
     blurb:
       "Nigeria, the Giant of Africa, is renowned for its vibrant music, cinema, cuisine, and diverse cultures across 250+ ethnic groups.",
+    foodImages: [
+      "/countries/nigeria/jollof.jpg",
+      "/countries/nigeria/Suya.webp",
+      "/countries/nigeria/pounded-yam.jpg",
+    ],
   },
   ethiopia: {
     name: "Ethiopia",
@@ -56,18 +68,27 @@ const factsData: Record<
       {
         name: "Lalibela",
         img: "https://images.unsplash.com/photo-1544966503-7cc4a7c22a7d?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/ethiopia/amharic.jpg",
       },
       {
         name: "Simien Mountains",
         img: "https://images.unsplash.com/photo-1564760055775-d63b17a55c44?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/ethiopia/Simien-Mountains.avif",
       },
       {
         name: "Axum",
         img: "https://images.unsplash.com/photo-1544966503-7cc4a7c22a7d?w=400&h=250&fit=crop&auto=format",
+        localImg:
+          "/countries/ethiopia/obelisk-kingdom-Aksum-Ethiopian-name-city.webp",
       },
     ],
     blurb:
       "Ethiopia is the cradle of humanity, home to ancient civilizations, unique wildlife, and the birthplace of coffee.",
+    foodImages: [
+      "/countries/ethiopia/EFC-doro-wat-hero-1280x720-1.jpg",
+      "/countries/ethiopia/Quick-Injera-FI.jpg",
+      "/countries/ethiopia/shiro-610x407.jpg",
+    ],
   },
   egypt: {
     name: "Egypt",
@@ -78,18 +99,26 @@ const factsData: Record<
       {
         name: "Pyramids of Giza",
         img: "https://images.unsplash.com/photo-1539650116574-75c0c6d73c6e?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/egypt/giza-plateau-pyramids.avif",
       },
       {
         name: "Luxor Temple",
         img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/egypt/luxor temple.jpeg",
       },
       {
         name: "Khan el-Khalili",
         img: "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/egypt/khan el khalili.jpeg",
       },
     ],
     blurb:
       "Egypt, the land of pharaohs and pyramids, is home to some of the world's most magnificent ancient monuments.",
+    foodImages: [
+      "/countries/egypt/Egyptian_food_Koshary.jpg",
+      "/countries/egypt/ful medames.jpeg",
+      "/countries/egypt/Ta'ameya fava bean fritters.webp",
+    ],
   },
   "dr-congo": {
     name: "DR Congo",
@@ -100,18 +129,26 @@ const factsData: Record<
       {
         name: "Virunga National Park",
         img: "https://images.unsplash.com/photo-1544966503-7cc4a7c22a7d?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/dr-congo/virunga nation part.jpg",
       },
       {
         name: "Congo River",
         img: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/dr-congo/congo-river.jpeg",
       },
       {
         name: "Mount Nyiragongo",
         img: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/dr-congo/mount-nyiragongo.jpg",
       },
     ],
     blurb:
       "The Democratic Republic of Congo is home to the world's second-largest rainforest and incredible biodiversity.",
+    foodImages: [
+      "/countries/dr-congo/Congo-Moambe-Chicken-13.jpg",
+      "/countries/dr-congo/fufu-congo.jpg",
+      "/countries/dr-congo/liboke-de-viande_6866-reg.jpg",
+    ],
   },
   tanzania: {
     name: "Tanzania",
@@ -122,18 +159,26 @@ const factsData: Record<
       {
         name: "Serengeti National Park",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/tanzania/serengeti-national-park.jpg",
       },
       {
         name: "Mount Kilimanjaro",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/tanzania/mount-kili.webp",
       },
       {
         name: "Zanzibar",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/tanzania/zanzibar.jpeg",
       },
     ],
     blurb:
       "Tanzania offers the ultimate African safari experience with the Serengeti, Kilimanjaro, and pristine beaches of Zanzibar.",
+    foodImages: [
+      "/countries/tanzania/Ugali_&_Sukuma_Wiki.jpg",
+      "/countries/tanzania/Nyama-Choma-Served-720x540.jpg",
+      "/countries/tanzania/Beef_Mishkaki_Recipe_A_Tanzanian_Street_Food_Favorite_1_-_Beck_Bulow_2240x.webp",
+    ],
   },
   "south-africa": {
     name: "South Africa",
@@ -144,18 +189,27 @@ const factsData: Record<
       {
         name: "Table Mountain",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg:
+          "/countries/south-africa/Table-Mountain_GettyImages-103891332.webp",
       },
       {
         name: "Kruger National Park",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/south-africa/kruger nation part.jpg",
       },
       {
         name: "Robben Island",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/south-africa/robben-islandhas-been.jpg",
       },
     ],
     blurb:
       "South Africa, the Rainbow Nation, combines stunning landscapes, diverse wildlife, and a rich cultural heritage.",
+    foodImages: [
+      "/countries/south-africa/Biltong_SlicedBiltong_2880x2304-2_42598d8c-a980-4421-9b7b-6ec46e780136_1024x1024.webp",
+      "/countries/south-africa/boereworst.png",
+      "/countries/south-africa/bunnychow.jpeg",
+    ],
   },
   kenya: {
     name: "Kenya",
@@ -166,18 +220,26 @@ const factsData: Record<
       {
         name: "Maasai Mara",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/kenya/maasai-mara.jpg",
       },
       {
         name: "Lake Nakuru",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/kenya/visit-lake-nakuru-and.jpg",
       },
       {
         name: "Mount Kenya",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/kenya/download (1).jpeg",
       },
     ],
     blurb:
       "Kenya is the safari capital of the world, offering incredible wildlife viewing and stunning landscapes.",
+    foodImages: [
+      "/countries/kenya/Ugali_&_Sukuma_Wiki (1).jpg",
+      "/countries/kenya/sukuma wiki.jpg",
+      "/countries/kenya/Nyama-Choma-Served-720x540 (1).jpg",
+    ],
   },
   uganda: {
     name: "Uganda",
@@ -188,18 +250,28 @@ const factsData: Record<
       {
         name: "Bwindi Impenetrable Forest",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/uganda/bwindi impenetable forest.jpeg",
       },
       {
         name: "Murchison Falls",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg:
+          "/countries/uganda/Murchison-Falls-Victoria-Nile-River-Uganda.webp",
       },
       {
         name: "Lake Victoria",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg:
+          "/countries/uganda/View-of-the-crystal-clear-blue-water-at-Lake-Victoria-Easy-Travel-Tanzania.jpg.webp",
       },
     ],
     blurb:
       "Uganda, the Pearl of Africa, is home to mountain gorillas and the source of the mighty Nile River.",
+    foodImages: [
+      "/countries/uganda/matoke.jpg",
+      "/countries/uganda/Chicken_Luwombo.JPG",
+      "/countries/uganda/rolex-food-uganda.jpg",
+    ],
   },
   algeria: {
     name: "Algeria",
@@ -210,18 +282,26 @@ const factsData: Record<
       {
         name: "Kasbah of Algiers",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/algeria/Kasbah of Algiers.jpeg",
       },
       {
         name: "Tassili n'Ajjer",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/algeria/Tassili n'Ajjer.jpg",
       },
       {
         name: "Roman Ruins of Timgad",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/algeria/Roman Ruins of Timgad.jpg",
       },
     ],
     blurb:
       "Algeria is the largest country in Africa, featuring ancient Roman ruins, Saharan landscapes, and rich Berber culture.",
+    foodImages: [
+      "/countries/algeria/4477315-algerian-couscous-Shari-4x3-1-3964e4489c6f48c084c513d39a330c8c.jpg",
+      "/countries/algeria/Chakchouka.webp",
+      "/countries/algeria/Mhadjeb.webp",
+    ],
   },
   sudan: {
     name: "Sudan",
@@ -232,40 +312,56 @@ const factsData: Record<
       {
         name: "Pyramids of Meroë",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/sudan/Pyramids of Meroë.jpg",
       },
       {
         name: "Sanganeb Marine National Park",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/sudan/Sanganeb Marine National Park.avif",
       },
       {
         name: "Dinder National Park",
         img: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/sudan/Dinder National Park.jpeg",
       },
     ],
     blurb:
       "Sudan is home to more pyramids than Egypt, along with diverse wildlife and ancient Nubian culture.",
+    foodImages: [
+      "/countries/sudan/Gourrassa.webp",
+      "/countries/sudan/Kissra.jpg",
+      '/countries/sudan/Ful Medames".jpeg',
+    ],
   },
   ghana: {
     name: "Ghana",
     capital: "Accra",
-    foods: ["Jollof Rice", "Waakye", "Kelewele"],
+    foods: ["Jollof Rice", "Fufu", "Banku"],
     languages: ["English", "Akan", "Ewe", "Ga"],
     spots: [
       {
         name: "Cape Coast Castle",
         img: "https://images.unsplash.com/photo-1594624541633-9e90d670da31?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/ghana/Cape-Coast-Castle-Ghana-West-Africa.webp",
       },
       {
         name: "Kakum National Park",
         img: "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/ghana/Kakum.jpg",
       },
       {
         name: "Kwame Nkrumah Mausoleum",
         img: "https://images.unsplash.com/photo-1558980394-0b3e26c72045?w=400&h=250&fit=crop&auto=format",
+        localImg: "/countries/ghana/The-Kwame-Nkrumah-Memorial-Park.webp",
       },
     ],
     blurb:
       "Ghana, the Land of Gold, is known for its warm hospitality, rich history, and vibrant music and arts scene.",
+    foodImages: [
+      "/countries/ghana/ghana jollof.webp",
+      "/countries/ghana/fufu.jpg",
+      "/countries/ghana/banku-and-Tilapia.jpg",
+    ],
   },
 };
 
@@ -278,6 +374,8 @@ export default function CountryPage() {
     name: string;
     img: string;
   } | null>(null);
+
+  // Using local images - no API calls needed
 
   // --- Country Quiz (3 quick questions auto-generated from factsData) ---
   type Question = {
@@ -313,23 +411,68 @@ export default function CountryPage() {
     const foodsPool = others.flatMap((c) => c.foods);
     const languagesPool = others.flatMap((c) => c.languages);
 
+    // Use countryId as seed for deterministic quiz generation
+    const seed = countryId
+      .split("")
+      .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000;
+      return x - Math.floor(x);
+    };
+
+    const seededShuffle = (arr: string[], seedOffset: number) => {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(seededRandom(seed + seedOffset + i) * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    };
+
+    const seededSampleDistinct = (
+      pool: string[],
+      exclude: Set<string>,
+      n: number,
+      seedOffset: number
+    ) => {
+      const choices: string[] = [];
+      const filtered = pool.filter((x) => !exclude.has(x));
+      while (choices.length < n && filtered.length) {
+        const idx = Math.floor(
+          seededRandom(seed + seedOffset + choices.length) * filtered.length
+        );
+        const pick = filtered.splice(idx, 1)[0];
+        if (!choices.includes(pick)) choices.push(pick);
+      }
+      return choices;
+    };
+
     const q1Answer = facts.capital;
-    const q1Options = shuffle([
-      q1Answer,
-      ...sampleDistinct(capitalsPool, new Set([q1Answer]), 3),
-    ]);
+    const q1Options = seededShuffle(
+      [
+        q1Answer,
+        ...seededSampleDistinct(capitalsPool, new Set([q1Answer]), 3, 100),
+      ],
+      200
+    );
 
     const q2Answer = facts.foods[0];
-    const q2Options = shuffle([
-      q2Answer,
-      ...sampleDistinct(foodsPool, new Set([q2Answer]), 3),
-    ]);
+    const q2Options = seededShuffle(
+      [
+        q2Answer,
+        ...seededSampleDistinct(foodsPool, new Set([q2Answer]), 3, 300),
+      ],
+      400
+    );
 
     const q3Answer = facts.languages[0];
-    const q3Options = shuffle([
-      q3Answer,
-      ...sampleDistinct(languagesPool, new Set([q3Answer]), 3),
-    ]);
+    const q3Options = seededShuffle(
+      [
+        q3Answer,
+        ...seededSampleDistinct(languagesPool, new Set([q3Answer]), 3, 500),
+      ],
+      600
+    );
 
     return [
       {
@@ -351,7 +494,7 @@ export default function CountryPage() {
         answer: q3Answer,
       },
     ];
-  }, [allCountries, facts]);
+  }, [allCountries, facts, countryId]);
 
   const [qIndex, setQIndex] = useState(0);
   const [score, setScore] = useState(0);
@@ -420,23 +563,40 @@ export default function CountryPage() {
       { keyId: "snake", emoji: "🐍" },
       { keyId: "turtle", emoji: "🐢" },
     ];
+
+    // Use countryId as seed for deterministic randomization
+    const seed = countryId
+      .split("")
+      .reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const pickCount = 12; // 12 pairs = 24 tiles
+
+    // Simple seeded random function
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000;
+      return x - Math.floor(x);
+    };
+
     const pool = [...emojiPool];
     const chosen: { keyId: string; emoji: string }[] = [];
+
     for (let i = 0; i < pickCount && pool.length; i++) {
-      const idx = Math.floor(Math.random() * pool.length);
+      const idx = Math.floor(seededRandom(seed + i) * pool.length);
       chosen.push(pool.splice(idx, 1)[0]);
     }
+
     const pairs = chosen.flatMap((it, i) => [
       { id: `${i}-a`, keyId: it.keyId, emoji: it.emoji },
       { id: `${i}-b`, keyId: it.keyId, emoji: it.emoji },
     ]);
+
+    // Shuffle pairs using seeded random
     for (let i = pairs.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(seededRandom(seed + i + 100) * (i + 1));
       [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
     }
+
     return pairs;
-  }, []);
+  }, [countryId]);
 
   const [cards, setCards] = useState<EmojiCard[]>(
     seedPairs.map((c) => ({ ...c, matched: false, flipped: false }))
@@ -447,7 +607,7 @@ export default function CountryPage() {
   const [seconds, setSeconds] = useState(0);
   const [running, setRunning] = useState(true);
 
-  useMemo(() => {
+  useEffect(() => {
     // restart timer when country changes
     setSeconds(0);
     setRunning(true);
@@ -455,7 +615,7 @@ export default function CountryPage() {
   }, [countryId]);
 
   // simple timer
-  useMemo(() => {
+  useEffect(() => {
     const t = setInterval(() => {
       setSeconds((s) => (running ? s + 1 : s));
     }, 1000);
@@ -463,7 +623,7 @@ export default function CountryPage() {
   }, [running]);
 
   const allMatched = cards.every((c) => c.matched);
-  useMemo(() => {
+  useEffect(() => {
     if (allMatched) setRunning(false);
   }, [allMatched]);
 
@@ -503,9 +663,18 @@ export default function CountryPage() {
   };
 
   const resetMemory = () => {
+    // Use the same seeded pairs but with a different shuffle seed
+    const seed = countryId
+      .split("")
+      .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000;
+      return x - Math.floor(x);
+    };
+
     const randomized = [...seedPairs];
     for (let i = randomized.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(seededRandom(seed + i + 200) * (i + 1));
       [randomized[i], randomized[j]] = [randomized[j], randomized[i]];
     }
     setCards(randomized.map((c) => ({ ...c, matched: false, flipped: false })));
@@ -592,12 +761,52 @@ export default function CountryPage() {
               <div
                 key={s.name}
                 className="relative h-40 rounded-xl overflow-hidden border border-amber-500/30 cursor-pointer hover:scale-105 transition-transform duration-300"
-                onClick={() => setSelectedImage(s)}
+                onClick={() =>
+                  setSelectedImage({ name: s.name, img: s.localImg })
+                }
               >
-                <Image src={s.img} alt={s.name} fill className="object-cover" />
+                <Image
+                  src={s.localImg}
+                  alt={s.name}
+                  fill
+                  className="object-cover"
+                />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">
                   <p className="text-yellow-100 text-sm flex items-center gap-2">
                     <Landmark className="w-4 h-4" /> {s.name}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Food Images Section - Using Local Images */}
+        <div className="bg-black/40 border border-amber-500/30 rounded-2xl p-6 text-orange-100">
+          <h2 className="font-semibold text-xl mb-4 flex items-center gap-2">
+            <Utensils className="w-5 h-5 text-amber-300" /> Traditional Foods
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {facts.foods.map((foodName, index) => (
+              <div
+                key={`${foodName}-${index}`}
+                className="relative h-48 rounded-xl overflow-hidden border border-amber-500/30 cursor-pointer hover:scale-105 transition-transform duration-300"
+                onClick={() =>
+                  setSelectedImage({
+                    name: foodName,
+                    img: facts.foodImages[index],
+                  })
+                }
+              >
+                <Image
+                  src={facts.foodImages[index]}
+                  alt={foodName}
+                  fill
+                  className="object-cover"
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                  <p className="text-yellow-100 text-sm font-medium">
+                    {foodName}
                   </p>
                 </div>
               </div>

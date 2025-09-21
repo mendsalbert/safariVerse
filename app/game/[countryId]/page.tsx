@@ -41,6 +41,8 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
+import BlockchainGameUI from "../../components/BlockchainGameUI";
+import RealtimeRewards from "../../components/RealtimeRewards";
 // Converted R3F animal models (GLB -> components)
 // Animal models removed from scene
 import { Model as TreeLarge } from "../../components/env/TreeLarge";
@@ -80,7 +82,7 @@ const preloadAssets = () => {
     try {
       useGLTF.preload(asset);
     } catch (error) {
-      console.warn(`Failed to preload ${asset}:`, error);
+      // Failed to preload asset
     }
   });
 };
@@ -1089,7 +1091,7 @@ function PlayerHumvee({
       oscillator.start(audioCtx.currentTime);
       oscillator.stop(audioCtx.currentTime + 0.3);
     } catch (error) {
-      console.warn("Failed to play collision sound:", error);
+      // Failed to play collision sound
     }
   };
 
@@ -2852,6 +2854,32 @@ export default function GamePage() {
           screenShake ? "animate-shake" : ""
         }`}
       >
+        {/* Blockchain Game UI */}
+        <BlockchainGameUI
+          gameState={{
+            score: gameState.score,
+            health: gameState.health,
+            survivalTime: gameState.survivalTime,
+            gameOver: gameState.gameOver,
+          }}
+          onGameStart={() => {
+            // Blockchain game session started
+          }}
+          onGameEnd={() => {
+            // Blockchain game session ended
+          }}
+        />
+
+        {/* Realtime Rewards */}
+        <RealtimeRewards
+          survivalTime={gameState.survivalTime}
+          score={gameState.score}
+          gameActive={!gameState.gameOver}
+          onMilestoneReached={(milestone) => {
+            // Milestone reached
+            // You could trigger additional effects here
+          }}
+        />
         {/* Game Header */}
         <div className="absolute top-0 left-0 right-0 z-10 bg-black/40 backdrop-blur-lg border-b border-green-500/30">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
