@@ -174,6 +174,8 @@ Here's how SafariVerse transforms digital cultural exchange:
 
 SafariVerse is built as a modern, scalable web application that prioritizes both performance and cultural authenticity:
 
+![System Architecture](https://hedera-nft-gld.s3.us-east-1.amazonaws.com/readme/system-architure.png)
+
 ### Core Technologies
 
 **Frontend Experience**
