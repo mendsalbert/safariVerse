@@ -31,7 +31,7 @@ export type OwnershipHistory = string[];
 
 export const SV_NFT_ADDRESS: string =
   process.env.NEXT_PUBLIC_SV_NFT_ADDRESS ||
-  "0xDC6788388f31d6f2dEaA4d97D50dC171822a74a5"; // latest deployed
+  "0x96d9646faEdcfbB6323f7cb4c2245a5F81b2710F"; // latest deployed
 
 function getWindowEthereum(): Eip1193Provider {
   if (typeof window === "undefined" || !(window as any).ethereum) {

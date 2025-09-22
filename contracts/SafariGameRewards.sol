@@ -79,12 +79,12 @@ contract SafariSurvivalToken is ERC20, Ownable, Pausable {
         _unpause();
     }
 
-    function _beforeTokenTransfer(address from, address to, uint256 amount)
+    function _update(address from, address to, uint256 value)
         internal
         override
         whenNotPaused
     {
-        super._beforeTokenTransfer(from, to, amount);
+        super._update(from, to, value);
     }
 }
 
@@ -206,7 +206,7 @@ contract SafariAchievementNFT is ERC721URIStorage, Ownable, Pausable {
         view 
         returns (Achievement memory) 
     {
-        require(_exists(tokenId), "SafariNFT: Token does not exist");
+        require(_ownerOf(tokenId) != address(0), "SafariNFT: Token does not exist");
         return achievements[tokenId];
     }
 
@@ -238,12 +238,13 @@ contract SafariAchievementNFT is ERC721URIStorage, Ownable, Pausable {
         _unpause();
     }
 
-    function _beforeTokenTransfer(address from, address to, uint256 tokenId, uint256 batchSize)
+    function _update(address to, uint256 tokenId, address auth)
         internal
         override
         whenNotPaused
+        returns (address)
     {
-        super._beforeTokenTransfer(from, to, tokenId, batchSize);
+        return super._update(to, tokenId, auth);
     }
 }
 

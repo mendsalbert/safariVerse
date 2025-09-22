@@ -48,7 +48,7 @@ export type PurchaseWithProduct = {
 // Contract address - deployed on Hedera Testnet
 export const SAFARIMART_ADDRESS: string =
   process.env.NEXT_PUBLIC_SAFARIMART_ADDRESS ||
-  "0x4f1266De96BE2B77996019f7061071e151Bc9A94"; // Latest deployed (MVP version)
+  "0xB4E8A4B4f2F9D74b1D9adFc4a71c2cb0DA67c349"; // Latest deployed (MVP version)
 
 function getWindowEthereum(): Eip1193Provider {
   if (typeof window === "undefined" || !(window as any).ethereum) {

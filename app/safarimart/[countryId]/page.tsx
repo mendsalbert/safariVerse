@@ -63,6 +63,75 @@ type ProductInput = {
   category: string;
 };
 
+// Utility function to remove duplicate products
+function removeDuplicateProducts(products: ProductData[]): ProductData[] {
+  const seen = new Map<string, ProductData>();
+  const duplicatesFound: string[] = [];
+
+  for (const product of products) {
+    // Create a unique key based on normalized title and fileUrl
+    // Normalize title: lowercase, trim, remove extra spaces, remove special chars
+    const normalizedTitle = product.title
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s]/g, "") // Remove special characters
+      .replace(/\s+/g, " "); // Replace multiple spaces with single space
+
+    const key = `${normalizedTitle}_${product.fileUrl}`;
+
+    if (!seen.has(key)) {
+      seen.set(key, product);
+    } else {
+      // Log the duplicate found
+      duplicatesFound.push(`"${product.title}" (ID: ${product.productId})`);
+
+      // If we find a duplicate, keep the one with the higher productId (more recent)
+      const existing = seen.get(key)!;
+      if (product.productId > existing.productId) {
+        console.log(
+          `🔄 Replacing duplicate "${existing.title}" (ID: ${existing.productId}) with newer version (ID: ${product.productId})`
+        );
+        seen.set(key, product);
+      } else {
+        console.log(
+          `🗑️ Removing duplicate "${product.title}" (ID: ${product.productId}), keeping existing (ID: ${existing.productId})`
+        );
+      }
+    }
+  }
+
+  if (duplicatesFound.length > 0) {
+    console.log(
+      `🔍 Found ${duplicatesFound.length} duplicate products:`,
+      duplicatesFound
+    );
+  }
+
+  // Additional pass: remove products with very similar titles (even with different fileUrls)
+  const uniqueProducts = Array.from(seen.values());
+  const finalProducts: ProductData[] = [];
+  const titlesSeen = new Set<string>();
+
+  for (const product of uniqueProducts) {
+    const normalizedTitle = product.title
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s]/g, "")
+      .replace(/\s+/g, " ");
+
+    if (!titlesSeen.has(normalizedTitle)) {
+      titlesSeen.add(normalizedTitle);
+      finalProducts.push(product);
+    } else {
+      console.log(
+        `🗑️ Removing similar title duplicate: "${product.title}" (ID: ${product.productId})`
+      );
+    }
+  }
+
+  return finalProducts;
+}
+
 // Simple loading overlay
 function LoadingOverlay({ text }: { text: string }) {
   return (
@@ -910,7 +979,7 @@ function Ground() {
   );
 }
 
-// Note: Heavy GLB preloads are deferred until the shop opens to avoid blocking navigation
+// Note: GLB models are loaded immediately for marketplace, lazy loaded for art gallery
 
 // 3D Artifact Loader Component
 function ArtifactModel({
@@ -919,16 +988,18 @@ function ArtifactModel({
   rotation = [0, 0, 0],
   targetSize = 1.4,
   scaleMultiplier = 1,
+  enableLazyLoading = false,
 }: {
   modelPath: string;
   position?: [number, number, number];
   rotation?: [number, number, number];
   targetSize?: number; // desired max dimension in world units
   scaleMultiplier?: number; // optional additional multiplier after fitting
+  enableLazyLoading?: boolean; // whether to enable lazy loading (for art gallery)
 }) {
   try {
-    // Preload the model to prevent blocks from showing
-    const { scene } = useGLTF(modelPath, true);
+    // Load the model immediately for marketplace, or with preloading for art gallery
+    const { scene } = useGLTF(modelPath, enableLazyLoading);
 
     const { fittedScene, finalScale } = useMemo(() => {
       const cloned = scene.clone(true);
@@ -1012,45 +1083,81 @@ function ShopItem3D({
       const proxiedUrl = `/api/glb?url=${encodeURIComponent(product.fileUrl)}`;
       console.log(`Loading artifact from: ${product.fileUrl} -> ${proxiedUrl}`);
 
-      // Preload the external GLB file
-      useGLTF.preload(proxiedUrl);
-
-      return <ArtifactModel modelPath={proxiedUrl} />;
+      // Load immediately without preloading for marketplace
+      return <ArtifactModel modelPath={proxiedUrl} enableLazyLoading={false} />;
     }
 
-    // Fallback to default model based on category
+    // Fallback to default model based on category - load immediately for marketplace
     switch (product.category) {
       case "3d-model":
         return (
-          <ArtifactModel modelPath="/artifact/African mask sculpture .glb" />
+          <ArtifactModel
+            modelPath="/artifact/African mask sculpture .glb"
+            enableLazyLoading={false}
+          />
         );
       case "texture":
-        return <ArtifactModel modelPath="/artifact/African Women Bust.glb" />;
+        return (
+          <ArtifactModel
+            modelPath="/artifact/African Women Bust.glb"
+            enableLazyLoading={false}
+          />
+        );
       case "audio":
-        return <ArtifactModel modelPath="/artifact/African Drum.glb" />;
+        return (
+          <ArtifactModel
+            modelPath="/artifact/African Drum.glb"
+            enableLazyLoading={false}
+          />
+        );
       case "animation":
-        return <ArtifactModel modelPath="/artifact/Wooden ornament.glb" />;
+        return (
+          <ArtifactModel
+            modelPath="/artifact/Wooden ornament.glb"
+            enableLazyLoading={false}
+          />
+        );
       case "material":
         return (
-          <ArtifactModel modelPath="/artifact/African woman wood sculpture .glb" />
+          <ArtifactModel
+            modelPath="/artifact/African woman wood sculpture .glb"
+            enableLazyLoading={false}
+          />
         );
       case "shader":
         return (
-          <ArtifactModel modelPath="/artifact/African Artifact - Yale Art Gallery.glb" />
+          <ArtifactModel
+            modelPath="/artifact/African Artifact - Yale Art Gallery.glb"
+            enableLazyLoading={false}
+          />
         );
       case "script":
         return (
-          <ArtifactModel modelPath="/artifact/%23Fashion%20Bucket%20Hat%20from%20Africa%20.glb" />
+          <ArtifactModel
+            modelPath="/artifact/%23Fashion%20Bucket%20Hat%20from%20Africa%20.glb"
+            enableLazyLoading={false}
+          />
         );
       case "template":
         return (
-          <ArtifactModel modelPath="/artifact/Little Succulent Plant.glb" />
+          <ArtifactModel
+            modelPath="/artifact/Little Succulent Plant.glb"
+            enableLazyLoading={false}
+          />
         );
       case "asset-pack":
-        return <ArtifactModel modelPath="/artifact/African Cucumber.glb" />;
+        return (
+          <ArtifactModel
+            modelPath="/artifact/African Cucumber.glb"
+            enableLazyLoading={false}
+          />
+        );
       default:
         return (
-          <ArtifactModel modelPath="/artifact/African mask sculpture .glb" />
+          <ArtifactModel
+            modelPath="/artifact/African mask sculpture .glb"
+            enableLazyLoading={false}
+          />
         );
     }
   };
@@ -1081,7 +1188,7 @@ function ShopEnvironment3D({
   setFocusedIndex,
   products,
 }: {
-  selectedCategory: string;
+  selectedCategory: string | "all";
   onItemClick: (product: ProductData) => void;
   hoveredItem: string | null;
   onHover: (itemId: string | null) => void;
@@ -1090,9 +1197,12 @@ function ShopEnvironment3D({
   products: ProductData[];
 }) {
   // Filter products by category
-  const filteredProducts = products.filter(
-    (product) => product.category === selectedCategory && product.isActive
-  );
+  const filteredProducts = products.filter((product) => {
+    if (selectedCategory === "all") {
+      return product.isActive;
+    }
+    return product.category === selectedCategory && product.isActive;
+  });
 
   // Premium marketplace layout (bright studio + pedestals)
   const radius = 10;
@@ -1222,9 +1332,9 @@ function VirtualShop({
   onRetryCountChange: (count: number) => void;
 }) {
   const { wallet, openModal } = useWallet();
-  const [selectedCategory, setSelectedCategory] = useState<ProductCategory>(
-    PRODUCT_CATEGORIES[0]
-  );
+  const [selectedCategory, setSelectedCategory] = useState<
+    ProductCategory | "all"
+  >("all");
   const [cart, setCart] = useState<
     Array<{
       id: string;
@@ -1252,29 +1362,29 @@ function VirtualShop({
     totalRevenue: "0",
   });
 
-  // Defer artifact GLB preloads until the shop is opened at least once
-  const artifactsPreloadedRef = useRef(false);
+  // Load artifact GLB models immediately for marketplace (no lazy loading)
+  const artifactsLoadedRef = useRef(false);
   useEffect(() => {
-    if (isOpen && !artifactsPreloadedRef.current) {
+    if (!artifactsLoadedRef.current) {
       try {
-        useGLTF.preload("/artifact/African mask sculpture .glb");
-        useGLTF.preload("/artifact/African Women Bust.glb");
-        useGLTF.preload("/artifact/Wooden ornament.glb");
-        useGLTF.preload("/artifact/African woman wood sculpture .glb");
-        useGLTF.preload("/artifact/African Artifact - Yale Art Gallery.glb");
-        useGLTF.preload(
-          "/artifact/%23Fashion%20Bucket%20Hat%20from%20Africa%20.glb"
-        );
-        useGLTF.preload("/artifact/Little Succulent Plant.glb");
-        useGLTF.preload("/artifact/African Drum.glb");
-        useGLTF.preload("/artifact/African Cucumber.glb");
+        // Load all artifacts immediately without preloading for marketplace
+        useGLTF("/artifact/African mask sculpture .glb");
+        useGLTF("/artifact/African Women Bust.glb");
+        useGLTF("/artifact/Wooden ornament.glb");
+        useGLTF("/artifact/African woman wood sculpture .glb");
+        useGLTF("/artifact/African Artifact - Yale Art Gallery.glb");
+        useGLTF("/artifact/%23Fashion%20Bucket%20Hat%20from%20Africa%20.glb");
+        useGLTF("/artifact/Little Succulent Plant.glb");
+        useGLTF("/artifact/African Drum.glb");
+        useGLTF("/artifact/African Cucumber.glb");
+        console.log("✅ All marketplace artifacts loaded immediately");
       } catch (e) {
-        console.warn("Artifact preload failed (non-blocking):", e);
+        console.warn("Artifact loading failed (non-blocking):", e);
       } finally {
-        artifactsPreloadedRef.current = true;
+        artifactsLoadedRef.current = true;
       }
     }
-  }, [isOpen]);
+  }, []); // Load on component mount, not when shop opens
 
   // Load marketplace data
   useEffect(() => {
@@ -1299,10 +1409,15 @@ function VirtualShop({
       console.log("🔄 Loading marketplace data...");
 
       // Load all active products from SafariMart
-      const productsData = await getAllActiveProducts();
+      const rawProductsData = await getAllActiveProducts();
+
+      // Remove duplicates from the products
+      const productsData = removeDuplicateProducts(rawProductsData);
 
       console.log("📊 Marketplace data loaded:", {
-        products: productsData.length,
+        rawProducts: rawProductsData.length,
+        uniqueProducts: productsData.length,
+        duplicatesRemoved: rawProductsData.length - productsData.length,
       });
 
       setProducts(productsData);
@@ -1361,9 +1476,12 @@ function VirtualShop({
   };
 
   // Filter products by category
-  const filteredProducts = products.filter(
-    (product) => product.category === selectedCategory && product.isActive
-  );
+  const filteredProducts = products.filter((product) => {
+    if (selectedCategory === "all") {
+      return product.isActive;
+    }
+    return product.category === selectedCategory && product.isActive;
+  });
 
   const addToCart = (product: ProductData) => {
     setCart((prev) => {
@@ -1809,6 +1927,17 @@ function VirtualShop({
       {/* Categories - Bottom Left */}
       <div className="absolute bottom-4 left-4 z-10 pointer-events-auto">
         <div className="flex gap-2 flex-wrap">
+          {/* All Categories Button */}
+          <button
+            onClick={() => setSelectedCategory("all")}
+            className={`px-3 py-2 rounded-lg text-sm transition-all ${
+              selectedCategory === "all"
+                ? "bg-gradient-to-r from-yellow-500 to-amber-500 text-white"
+                : "bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm"
+            }`}
+          >
+            All
+          </button>
           {PRODUCT_CATEGORIES.map((category) => (
             <button
               key={category}

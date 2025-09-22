@@ -348,6 +348,53 @@ npm run dev
 4. **Start exploring:**
    Open [http://localhost:3000](http://localhost:3000) and begin your journey across the African continent.
 
+## 📋 Smart Contract Addresses
+
+SafariVerse is powered by smart contracts deployed on Hedera Testnet:
+
+### **SafariVerseNFT Contract**
+
+- **Address**: `0x96d9646faEdcfbB6323f7cb4c2245a5F81b2710F`
+- **Purpose**: ERC-721 NFT contract for African cultural artifacts
+- **Explorer**: [View on Hashscan](https://hashscan.io/testnet/contract/0x96d9646faEdcfbB6323f7cb4c2245a5F81b2710F)
+
+### **SafariMart Contract**
+
+- **Address**: `0xB4E8A4B4f2F9D74b1D9adFc4a71c2cb0DA67c349`
+- **Purpose**: Marketplace for trading 3D models and digital assets
+- **Explorer**: [View on Hashscan](https://hashscan.io/testnet/contract/0xB4E8A4B4f2F9D74b1D9adFc4a71c2cb0DA67c349)
+
+### **Environment Setup**
+
+Add these to your `.env` file:
+
+```bash
+NEXT_PUBLIC_SAFARIVERSENFT_ADDRESS=0x96d9646faEdcfbB6323f7cb4c2245a5F81b2710F
+NEXT_PUBLIC_SAFARIMART_ADDRESS=0xB4E8A4B4f2F9D74b1D9adFc4a71c2cb0DA67c349
+```
+
+## 🎨 3D Asset Resources
+
+Here is a list of GLB URLs you can use to post NFTs and marketplace items:
+
+### Available 3D Models
+
+```
+https://hedera-nft-gld.s3.us-east-1.amazonaws.com/artgallery/2000%E2%80%99s+radio.glb
+
+https://hedera-nft-gld.s3.us-east-1.amazonaws.com/artgallery/African+American+designer+backpack+.glb
+
+https://hedera-nft-gld.s3.us-east-1.amazonaws.com/artgallery/African+Bowl.glb
+
+https://hedera-nft-gld.s3.us-east-1.amazonaws.com/artgallery/African+Chair+(1).glb
+
+https://hedera-nft-gld.s3.us-east-1.amazonaws.com/artgallery/Ndebele+doll+2.glb
+
+https://hedera-nft-gld.s3.us-east-1.amazonaws.com/artgallery/Olympic+Africa%2C+by+Tim+Holmes.glb
+```
+
+These 3D models represent authentic African cultural artifacts and can be used when creating new products in the marketplace or minting NFTs. Simply copy and paste any of these URLs into the "File URL" field when creating new items.
+
 ## 🛠️ Tech Stack Deep Dive
 
 **Frontend Excellence**

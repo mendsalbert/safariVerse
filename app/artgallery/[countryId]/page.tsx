@@ -26,7 +26,8 @@ function FitModel({
   targetSize?: number;
 }) {
   try {
-    const { scene } = useGLTF(modelPath);
+    // Use lazy loading for art gallery models
+    const { scene } = useGLTF(modelPath, true);
     const { fitted, scale } = useMemo(() => {
       const cloned = scene.clone(true);
       const box = new THREE.Box3().setFromObject(cloned);
