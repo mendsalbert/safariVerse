@@ -133,7 +133,7 @@ export default function BlockchainGameUI({
     walletState.nftCount,
   ]);
 
-  // Initialize blockchain services
+  // Initialize blockchain services and auto-connect wallet
   useEffect(() => {
     const initializeBlockchain = async () => {
       try {
@@ -149,6 +149,9 @@ export default function BlockchainGameUI({
 
         setGameBlockchain(blockchain);
         setSessionManager(manager);
+
+        // Auto-connect wallet after blockchain is initialized
+        await autoConnectWallet(blockchain);
       } catch (error) {
         setWalletState((prev) => ({
           ...prev,
@@ -158,6 +161,13 @@ export default function BlockchainGameUI({
     };
 
     initializeBlockchain();
+
+    // Cleanup event listeners on unmount
+    return () => {
+      if (typeof window !== "undefined" && window.ethereum) {
+        window.ethereum.removeAllListeners?.("accountsChanged");
+      }
+    };
   }, []);
 
   // Disconnect wallet
@@ -177,6 +187,87 @@ export default function BlockchainGameUI({
       localStorage.removeItem("safari-wallet-state");
     }
   }, []);
+
+  // Auto-connect wallet on component mount
+  const autoConnectWallet = useCallback(
+    async (blockchain: SafariGameBlockchain) => {
+      // Don't auto-connect if user is already connected or there's an error
+      if (walletState.connected || walletState.error) return;
+
+      try {
+        // Check if MetaMask is installed
+        if (typeof window.ethereum === "undefined") {
+          return; // Silently fail if MetaMask not installed
+        }
+
+        // Check if already connected (without requesting permission)
+        const accounts = await window.ethereum.request({
+          method: "eth_accounts",
+        });
+
+        if (accounts && accounts.length > 0) {
+          const ethereumAddress = accounts[0];
+
+          // Use saved Hedera ID or generate new one
+          let simulatedHederaId = walletState.accountId;
+          if (
+            !simulatedHederaId ||
+            walletState.ethereumAddress !== ethereumAddress
+          ) {
+            simulatedHederaId = `0.0.${
+              Math.floor(Math.random() * 999999) + 100000
+            }`;
+          }
+
+          // Get player assets
+          const assets = await blockchain.getPlayerAssets(simulatedHederaId);
+
+          // Use existing tokens or give starting tokens
+          let finalTokenBalance = walletState.survivalTokenBalance;
+          if (finalTokenBalance === 0) {
+            finalTokenBalance = 10000; // 100 SAFARI
+          }
+
+          setWalletState({
+            connected: true,
+            accountId: simulatedHederaId,
+            ethereumAddress: ethereumAddress,
+            survivalTokenBalance: finalTokenBalance,
+            nftCount: assets.achievementNFTs.length,
+            loading: false,
+            error: null,
+          });
+
+          console.log("🔄 Auto-connected MetaMask wallet:", ethereumAddress);
+
+          // Set up account change listener
+          if (window.ethereum) {
+            window.ethereum.removeAllListeners?.("accountsChanged");
+            window.ethereum.on("accountsChanged", (accounts: string[]) => {
+              if (accounts.length === 0) {
+                // User disconnected
+                disconnectWallet();
+              } else if (accounts[0] !== ethereumAddress) {
+                // User switched accounts - reconnect with new account
+                setTimeout(() => autoConnectWallet(blockchain), 100);
+              }
+            });
+          }
+        }
+      } catch (error) {
+        // Silently fail auto-connect - user can connect manually
+        console.log("⚠️ Auto-connect failed, user can connect manually");
+      }
+    },
+    [
+      walletState.connected,
+      walletState.error,
+      walletState.accountId,
+      walletState.ethereumAddress,
+      walletState.survivalTokenBalance,
+      disconnectWallet,
+    ]
+  );
 
   // Connect MetaMask wallet
   const connectWallet = useCallback(async () => {
@@ -242,19 +333,7 @@ export default function BlockchainGameUI({
         error: null,
       });
 
-      // Listen for account changes
-      if (window.ethereum) {
-        window.ethereum
-          .request({
-            method: "eth_accounts",
-          })
-          .then((accounts: string[]) => {
-            if (accounts.length === 0) {
-              // User disconnected
-              disconnectWallet();
-            }
-          });
-      }
+      // Account change listener is handled in autoConnectWallet
     } catch (error) {
       setWalletState((prev) => ({
         ...prev,

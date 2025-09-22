@@ -1058,7 +1058,7 @@ function PlayerHumvee({
   const { collisionObjects } = useContext(CollisionContext);
   const lastCollisionTimeRef = useRef<number>(0);
   const COLLISION_COOLDOWN = 1000; // 1 second cooldown between collisions
-  const camDistanceRef = useRef<number>(1.6);
+  const camDistanceRef = useRef<number>(8.0);
   // Seamless driving sound (gapless loop) via Web Audio API
   const audioCtxRef = useRef<AudioContext | null>(null);
   const driveBufferRef = useRef<AudioBuffer | null>(null);
@@ -1358,15 +1358,21 @@ function PlayerHumvee({
 
     // Audio is handled by key handlers for reliable gesture-driven control
 
-    // Follow camera
+    // Follow camera with better third-person perspective
     const camOffset = new THREE.Vector3(
-      0,
-      4.0,
-      camDistanceRef.current
+      -2, // Side offset for better view
+      3.5, // Lower height for driving perspective
+      camDistanceRef.current * 0.8 // Closer to vehicle
     ).applyEuler(group.rotation);
     const target = group.position.clone();
-    camera.position.lerp(target.clone().add(camOffset), 0.12);
-    camera.lookAt(target);
+    const cameraTarget = target.clone().add(camOffset);
+    camera.position.lerp(cameraTarget, 0.12);
+
+    // Look slightly ahead of the vehicle for better driving view
+    const lookTarget = target
+      .clone()
+      .add(new THREE.Vector3(0, 0, -2).applyEuler(group.rotation));
+    camera.lookAt(lookTarget);
   });
 
   return (
@@ -1431,8 +1437,11 @@ function ControlsAndHotkeys() {
         enablePan
         enableZoom
         enableRotate
-        minDistance={6}
-        maxDistance={2000}
+        minDistance={4}
+        maxDistance={50}
+        maxPolarAngle={Math.PI / 2.2}
+        minPolarAngle={Math.PI / 8}
+        target={[-2, 0, 6]}
       />
     </>
   );
@@ -1937,8 +1946,8 @@ const GameScene = React.memo(function GameScene({
     <>
       <PerspectiveCamera
         makeDefault
-        position={[0, 11, 10]}
-        fov={70}
+        position={[-8, 6, 12]}
+        fov={75}
         near={0.1}
         far={5000}
       />
@@ -2658,7 +2667,7 @@ const GameScene = React.memo(function GameScene({
         position={[0, 0.01, 0]}
       />
 
-      <ControlsAndHotkeys />
+      {/* OrbitControls disabled during gameplay for better driving camera */}
     </>
   );
 });
