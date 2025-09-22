@@ -72,7 +72,7 @@ Here's how SafariVerse transforms digital cultural exchange:
 - Explore population demographics, languages, and local traditions
 - See real-time community activity and member presence
 
-![Country Exploration](placeholder-country-view.png)
+![Country Exploration](https://hedera-nft-gld.s3.us-east-1.amazonaws.com/readme/country-exp.png)
 
 ### 🏘️ Location-Based Community Hubs
 
@@ -88,7 +88,7 @@ Here's how SafariVerse transforms digital cultural exchange:
 - Join conversations specific to each location's unique character
 - Share experiences, ask questions, and get authentic local insights
 
-![Virtual Community Hub](placeholder-community-hub.png)
+![Virtual Community Hub](https://hedera-nft-gld.s3.us-east-1.amazonaws.com/readme/virtual-com-hub.png)
 
 **Cultural Exchange Spaces**
 
@@ -106,7 +106,7 @@ Here's how SafariVerse transforms digital cultural exchange:
 - Discover rare digital artifacts representing African heritage
 - Categories spanning traditional art, contemporary culture, historical artifacts, and musical heritage
 
-![Cultural Marketplace](placeholder-marketplace.png)
+![Cultural Marketplace](https://hedera-nft-gld.s3.us-east-1.amazonaws.com/readme/cultural+marketplace.png)
 
 **Community-Driven Curation**
 
@@ -125,7 +125,7 @@ Here's how SafariVerse transforms digital cultural exchange:
 - Complete cultural quests and learn about local traditions
 - Earn rewards that have real value in the SafariVerse economy
 
-![Safari Game](placeholder-safari-game.png)
+![Safari Game](https://hedera-nft-gld.s3.us-east-1.amazonaws.com/readme/safari-game.png)
 
 **Educational Gameplay**
 
@@ -150,7 +150,7 @@ Here's how SafariVerse transforms digital cultural exchange:
 - Participate in live discussions about African culture, history, and current events
 - Connect with DJs, musicians, and cultural commentators
 
-![Live Radio Hub](placeholder-radio-hub.png)
+![Live Radio Hub](https://hedera-nft-gld.s3.us-east-1.amazonaws.com/readme/live-radio.png)
 
 **Real-Time Cultural Events**
 
@@ -168,7 +168,7 @@ Here's how SafariVerse transforms digital cultural exchange:
 - Get personalized recommendations for historical sites and cultural experiences
 - Access verified information curated by African historians and cultural experts
 
-![AI History Assistant](placeholder-ai-history.png)
+![AI History Assistant](https://hedera-nft-gld.s3.us-east-1.amazonaws.com/readme/history.png)
 
 ## How I Built SafariVerse
 
