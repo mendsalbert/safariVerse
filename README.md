@@ -88,6 +88,10 @@ Here's how SafariVerse transforms digital cultural exchange:
 - Join conversations specific to each location's unique character
 - Share experiences, ask questions, and get authentic local insights
 
+![Virtual Community Hub](https://hedera-nft-gld.s3.us-east-1.amazonaws.com/artgallery/community.png)
+
+![Virtual Community Hub](https://hedera-nft-gld.s3.us-east-1.amazonaws.com/artgallery/art-gallary.png)
+
 ![Virtual Community Hub](https://hedera-nft-gld.s3.us-east-1.amazonaws.com/readme/virtual-com-hub.png)
 
 **Cultural Exchange Spaces**
