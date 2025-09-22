@@ -5,6 +5,18 @@ import { OrbitControls, useGLTF } from "@react-three/drei";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
+import {
+  ART_GALLERY_ITEMS,
+  type ArtGalleryItem,
+} from "../../lib/art-gallery-utils";
+
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
+    </div>
+  );
+}
 
 function FitModel({
   modelPath,
@@ -13,18 +25,29 @@ function FitModel({
   modelPath: string;
   targetSize?: number;
 }) {
-  const { scene } = useGLTF(modelPath);
-  const { fitted, scale } = useMemo(() => {
-    const cloned = scene.clone(true);
-    const box = new THREE.Box3().setFromObject(cloned);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z) || 1;
-    const s = targetSize / maxDim;
-    return { fitted: cloned, scale: s };
-  }, [scene, targetSize]);
+  try {
+    const { scene } = useGLTF(modelPath);
+    const { fitted, scale } = useMemo(() => {
+      const cloned = scene.clone(true);
+      const box = new THREE.Box3().setFromObject(cloned);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const maxDim = Math.max(size.x, size.y, size.z) || 1;
+      const s = targetSize / maxDim;
+      return { fitted: cloned, scale: s };
+    }, [scene, targetSize]);
 
-  return <primitive object={fitted} scale={[scale, scale, scale]} />;
+    return <primitive object={fitted} scale={[scale, scale, scale]} />;
+  } catch (error) {
+    console.warn(`Failed to load GLB model: ${modelPath}`, error);
+    // Return a fallback box if model fails to load
+    return (
+      <mesh>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color="#8B4513" />
+      </mesh>
+    );
+  }
 }
 
 function ModelOnPedestal({
@@ -36,22 +59,32 @@ function ModelOnPedestal({
 }) {
   return (
     <group>
-      {/* Pedestal */}
-      <mesh position={[0, -1.0, 0]}>
-        <cylinderGeometry args={[1.0 * scale, 1.2 * scale, 0.35 * scale, 24]} />
+      {/* Safari-themed Pedestal */}
+      <mesh position={[0, -1.0, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[1.0 * scale, 1.2 * scale, 0.4 * scale, 32]} />
+        <meshStandardMaterial color="#fed7aa" roughness={0.2} metalness={0.1} />
+      </mesh>
+
+      {/* Pedestal Base */}
+      <mesh position={[0, -1.3, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[1.3 * scale, 1.3 * scale, 0.15 * scale, 32]} />
         <meshStandardMaterial
-          color="#dddddd"
-          roughness={0.3}
+          color="#fdba74"
+          roughness={0.4}
           metalness={0.05}
         />
       </mesh>
+
       {/* Model */}
-      <FitModel modelPath={modelPath} targetSize={2.4 * scale} />
+      <group position={[0, 0, 0]}>
+        <FitModel modelPath={modelPath} targetSize={2.4 * scale} />
+      </group>
     </group>
   );
 }
 
-type GalleryItem = { type: "model"; src: string; title: string };
+// Use the imported type from utils
+type GalleryItem = ArtGalleryItem;
 
 function GalleryScene({
   items,
@@ -60,61 +93,56 @@ function GalleryScene({
   items: GalleryItem[];
   focusedIndex: number;
 }) {
-  const radius = 10;
   const focused = items[focusedIndex];
+
   return (
     <>
-      {/* Bright Floor */}
+      {/* Safari-themed Floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]}>
-        <planeGeometry args={[80, 80]} />
-        <meshStandardMaterial color="#f3f4f6" roughness={0.9} />
+        <planeGeometry args={[50, 50]} />
+        <meshStandardMaterial color="#fef3c7" />
       </mesh>
 
       {/* Center focused model */}
-      <group position={[0, 2.2, -4]}>
+      <group position={[0, 2.2, 0]}>
         <ModelOnPedestal modelPath={focused.src} scale={1.4} />
       </group>
 
-      {/* Background previews in a bright arc */}
+      {/* Background previews - only show nearby models */}
       {items.map((it, i) => {
         if (i === focusedIndex) return null;
-        const idx = i < focusedIndex ? i : i - 1;
-        const total = items.length - 1;
-        const angle =
-          ((idx - (total - 1) / 2) / Math.max(total - 1, 1)) * Math.PI * 0.65;
+
+        // Only show models within 2 positions of the current focus
+        const distance = Math.abs(i - focusedIndex);
+        if (distance > 2) return null;
+
+        const angle = ((i - focusedIndex) / items.length) * Math.PI * 2;
+        const radius = 8;
         const x = Math.sin(angle) * radius;
-        const z = -6 - Math.cos(angle) * radius;
-        const y = 1.9;
-        const tilt = -angle * 0.35;
+        const z = Math.cos(angle) * radius;
+
         return (
           <group
-            key={`${it.type}-${i}`}
-            position={[x, y, z]}
-            rotation={[0, tilt, 0]}
+            key={`preview-${i}`}
+            position={[x, 1.5, z]}
+            rotation={[0, -angle, 0]}
           >
-            <ModelOnPedestal modelPath={it.src} scale={0.95} />
+            <ModelOnPedestal modelPath={it.src} scale={0.8} />
           </group>
         );
       })}
 
-      {/* Bright Studio Lighting */}
-      <ambientLight intensity={0.8} />
-      <hemisphereLight args={[0xffffff, 0xdddddd, 0.9]} />
+      {/* Safari-themed lighting */}
+      <ambientLight intensity={0.6} />
       <directionalLight
-        position={[8, 12, 10]}
-        intensity={1.2}
-        color={0xffffff}
+        position={[10, 10, 5]}
+        intensity={1.0}
+        color={0xfff7ed}
       />
       <directionalLight
-        position={[-8, 10, -6]}
-        intensity={0.9}
-        color={0xffffff}
-      />
-      <spotLight
-        position={[0, 12, 2]}
-        angle={0.4}
-        intensity={2.0}
-        color={0xffffff}
+        position={[-10, 10, -5]}
+        intensity={0.8}
+        color={0xffedd5}
       />
     </>
   );
@@ -125,54 +153,36 @@ export default function ArtGalleryPage() {
   const router = useRouter();
   const countryId = params.countryId as string;
 
-  // 3D GLB artifacts from public/art-gallery (pictures removed per request)
-  const items: GalleryItem[] = [
-    // {
-    //   type: "model",
-    //   src: "/art-gallery/An old South African springbok coin.glb",
-    //   title: "Springbok Coin",
-    // },
-    {
-      type: "model",
-      src: "/art-gallery/Elephant .glb",
-      title: "Elephant Sculpture",
-    },
-    {
-      type: "model",
-      src: "/art-gallery/2000’s radio.glb",
-      title: "2000's Radio",
-    },
-    { type: "model", src: "/art-gallery/Salt lamp.glb", title: "Salt Lamp" },
-    {
-      type: "model",
-      src: "/art-gallery/African Chair.glb",
-      title: "African Chair",
-    },
-    {
-      type: "model",
-      src: "/art-gallery/3 leg potjie pot.glb",
-      title: "3-Leg Potjie Pot",
-    },
-    {
-      type: "model",
-      src: "/art-gallery/Woodstock 2_.glb",
-      title: "Woodstock 2",
-    },
-    { type: "model", src: "/art-gallery/Giraffe (1).glb", title: "Giraffe" },
-  ];
-
-  // Preload models
-  useGLTF.preload("/art-gallery/An old South African springbok coin.glb");
-  useGLTF.preload("/art-gallery/Elephant .glb");
-  useGLTF.preload("/art-gallery/2000’s radio.glb");
-  useGLTF.preload("/art-gallery/Salt lamp.glb");
-  useGLTF.preload("/art-gallery/African Chair.glb");
-  useGLTF.preload("/art-gallery/3 leg potjie pot.glb");
-  useGLTF.preload("/art-gallery/Woodstock 2_.glb");
-  useGLTF.preload("/art-gallery/Giraffe (1).glb");
-
+  // Use predefined art gallery items from AWS S3 for faster loading
+  const items: GalleryItem[] = ART_GALLERY_ITEMS;
   const titles = useMemo(() => items.map((it) => it.title), [items]);
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Lazy loading: Only preload the current model and next/prev models
+  useEffect(() => {
+    const preloadModel = (index: number) => {
+      if (index >= 0 && index < items.length) {
+        try {
+          useGLTF.preload(items[index].src);
+        } catch (error) {
+          console.warn(`Failed to preload model: ${items[index].title}`, error);
+        }
+      }
+    };
+
+    // Preload current model and adjacent models only
+    preloadModel(focusedIndex);
+    preloadModel(focusedIndex - 1);
+    preloadModel(focusedIndex + 1);
+  }, [focusedIndex, items]);
+
+  // Track loading state
+  useEffect(() => {
+    setIsLoading(true);
+    const timer = setTimeout(() => setIsLoading(false), 1000);
+    return () => clearTimeout(timer);
+  }, [focusedIndex]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -190,71 +200,118 @@ export default function ArtGalleryPage() {
   }, [items.length]);
 
   return (
-    <div className="w-full h-screen relative bg-gradient-to-b from-white to-[#f2efe8]">
-      <Canvas camera={{ position: [0, 7, 14], fov: 60 }}>
+    <div className="w-full h-screen relative bg-gradient-to-b from-orange-50 to-amber-100">
+      <Canvas camera={{ position: [5, 4, 8], fov: 60 }}>
         <OrbitControls
           enablePan
           enableZoom
           enableRotate
-          minDistance={7}
-          maxDistance={26}
-          target={[0, 2.2, -4]}
+          minDistance={4}
+          maxDistance={15}
+          target={[0, 1.5, 0]}
+          maxPolarAngle={Math.PI / 2}
+          minPolarAngle={Math.PI / 6}
         />
         <GalleryScene items={items} focusedIndex={focusedIndex} />
       </Canvas>
 
-      {/* Top bar */}
+      {/* Museum Header */}
       <div className="absolute top-4 left-4 right-4 z-10">
-        <div className="flex justify-between items-center bg-white/60 backdrop-blur-md rounded-lg p-3 border border-amber-500/30">
+        <div className="flex justify-between items-center bg-orange-50/90 backdrop-blur-md rounded-xl p-4 border border-orange-200 shadow-lg">
           <button
             onClick={() => router.back()}
-            className="px-3 py-2 rounded bg-white/70 text-gray-800 hover:bg-white"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
           >
-            Back
+            ← Back
           </button>
-          <h1 className="text-xl font-bold text-gray-900">
-            African Art Gallery
-          </h1>
-          <div className="flex items-center gap-2">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">
+              African Heritage Museum
+            </h1>
+            <p className="text-sm text-gray-600">
+              Collection of {items.length} Artifacts
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
             <button
               onClick={() =>
                 setFocusedIndex((p) => (p - 1 + items.length) % items.length)
               }
-              className="px-3 py-2 rounded bg-gradient-to-r from-amber-500 to-orange-500 text-white"
+              className="px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 transition-colors"
             >
-              Prev
+              ← Previous
             </button>
             <button
               onClick={() => setFocusedIndex((p) => (p + 1) % items.length)}
-              className="px-3 py-2 rounded bg-gradient-to-r from-amber-500 to-orange-500 text-white"
+              className="px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 transition-colors"
             >
-              Next
+              Next →
             </button>
           </div>
         </div>
       </div>
 
-      {/* Caption */}
-      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10">
-        <div className="px-5 py-3 bg-white/70 text-gray-900 backdrop-blur-lg rounded-xl border border-amber-500/30">
-          <p className="text-sm font-semibold text-center">
-            {titles[focusedIndex]}
-          </p>
+      {/* Artifact Information Panel */}
+      <div className="absolute bottom-6 left-6 z-10 max-w-md">
+        <div className="bg-orange-50/95 backdrop-blur-lg rounded-xl p-6 border border-orange-200 shadow-xl">
+          <div className="flex items-start gap-4">
+            {isLoading && <LoadingSpinner />}
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                {titles[focusedIndex]}
+              </h3>
+              <div className="text-sm text-gray-600 space-y-1">
+                <p>
+                  <strong>Artifact:</strong> {focusedIndex + 1} of{" "}
+                  {items.length}
+                </p>
+                <p>
+                  <strong>Collection:</strong> African Heritage
+                </p>
+                <p>
+                  <strong>Status:</strong> {isLoading ? "Loading..." : "Ready"}
+                </p>
+              </div>
+
+              {/* Navigation hints */}
+              <div className="mt-4 pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-500">
+                  Use arrow keys or buttons to navigate • Drag to rotate view
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Dots */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
-        <div className="flex gap-2 bg-white/60 text-gray-900 backdrop-blur-md rounded-full px-4 py-2 border border-amber-500/30">
-          {items.map((_, i) => (
-            <div
-              key={i}
-              onClick={() => setFocusedIndex(i)}
-              className={`h-2 rounded-full transition-all ${
-                i === focusedIndex ? "w-8 bg-amber-500" : "w-2 bg-gray-400"
-              }`}
-            />
-          ))}
+      {/* Collection Navigation */}
+      <div className="absolute bottom-6 right-6 z-10">
+        <div className="bg-orange-50/95 backdrop-blur-lg rounded-xl p-4 border border-orange-200 shadow-xl">
+          <h4 className="text-sm font-semibold text-gray-700 mb-3">
+            Collection Items
+          </h4>
+          <div className="grid grid-cols-5 gap-2 max-w-xs">
+            {items.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setFocusedIndex(i)}
+                className={`h-8 w-8 rounded-lg border-2 transition-all ${
+                  i === focusedIndex
+                    ? "bg-orange-600 border-orange-600"
+                    : "bg-orange-100 border-orange-300 hover:bg-orange-200"
+                }`}
+                title={titles[i]}
+              >
+                <span
+                  className={`text-xs font-medium ${
+                    i === focusedIndex ? "text-white" : "text-gray-600"
+                  }`}
+                >
+                  {i + 1}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
