@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "clear-firebase": "node scripts/clear-firebase-simple.js"
+    "clear-firebase": "node scripts/clear-firebase-simple.js",
+    "reset": "node scripts/complete-reset.js"
   },
   "dependencies": {
     "@babylonjs/core": "^8.27.0",
