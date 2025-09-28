@@ -149,8 +149,8 @@ Here's how SafariVerse transforms digital cultural exchange:
 
 **Live Radio & Social Hub**
 
-- Tune into live radio stations featuring African music and cultural programming
-- Join the social hub for real-time conversations and community events
+- Tune into live radio stations featuring African music and cultural programming.
+- Join the social hub for real-time conversations and community events.
 - Participate in live discussions about African culture, history, and current events
 - Connect with DJs, musicians, and cultural commentators
 
