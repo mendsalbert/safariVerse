@@ -9,7 +9,6 @@ const SafariGameRewardsModule = buildModule("SafariGameRewardsModule", (m) => {
     id: "SafariSurvivalToken",
   });
 
-  // Deploy Safari Achievement NFT (ERC-721)
   const safariAchievementNFT = m.contract("SafariAchievementNFT", [deployer], {
     id: "SafariAchievementNFT",
   });
