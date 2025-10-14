@@ -184,31 +184,31 @@ SafariVerse is built as a modern, scalable web application that prioritizes both
 
 **Frontend Experience**
 
-- **Next.js 15** with React 19 for cutting-edge web performance
-- **Three.js & React Three Fiber** for immersive 3D geography
-- **TypeScript** for robust, maintainable code
-- **Tailwind CSS** with custom African-inspired design system
+- Next.js 15 with React 19 for cutting-edge web performance
+- Three.js & React Three Fiber for immersive 3D geography
+- TypeScript for robust, maintainable code
+- Tailwind CSS with custom African-inspired design system
 
 **3D World Creation**
 
-- **React Three Drei** for advanced 3D components and controls
-- **Custom shaders** for realistic African landscapes and lighting
-- **Optimized 3D models** representing authentic African architecture
-- **Progressive loading** for smooth performance across devices
+- React Three Drei for advanced 3D components and controls
+- Custom shaders for realistic African landscapes and lighting
+- Optimized 3D models representing authentic African architecture
+- Progressive loading for smooth performance across devices
 
 **Blockchain Integration**
 
-- **Hedera Hashgraph** for fast, low-cost NFT transactions
-- **Smart contracts** for cultural artifact authentication
-- **Wallet integration** for seamless crypto transactions
-- **Community governance** through blockchain voting
+- Hedera Hashgraph for fast, low-cost NFT transactions
+- Smart contracts for cultural artifact authentication
+- Wallet integration for seamless crypto transactions
+- Community governance through blockchain voting
 
 **Real-Time Features**
 
-- **WebSocket connections** for live chat and community interaction
-- **Real-time presence indicators** showing active community members
-- **Live event streaming** for cultural performances and education
-- **Collaborative features** for community-driven content creation
+- WebSocket connections for live chat and community interaction
+- Real-time presence indicators showing active community members
+- Live event streaming for cultural performances and education
+- Collaborative features for community-driven content creation
 
 ### Cultural Authenticity Framework
 
@@ -283,35 +283,35 @@ Successful cultural platforms must balance global accessibility with deep respec
 
 The journey of SafariVerse is just beginning, and our roadmap reflects our commitment to community-driven growth:
 
-**Community Expansion**
+### Community Expansion
 
 - Partner with African cultural organizations, universities, and community groups
 - Launch ambassador programs in major African cities
 - Develop content creator incubation programs
 - Establish local community governance structures
 
-**Technical Evolution**
+### Technical Evolution
 
 - Mobile app development for iOS and Android
 - Virtual Reality support for even more immersive exploration
 - Augmented Reality features for real-world cultural discovery
 - Advanced AI for personalized cultural recommendations
 
-**Cultural Programming**
+### Cultural Programming
 
 - Regular virtual festivals celebrating African holidays and traditions
 - Educational partnerships with schools and cultural institutions
 - Artist residency programs supporting African creators
 - Language learning programs integrated with community interaction
 
-**Economic Empowerment**
+### Economic Empowerment
 
 - Expanded marketplace with physical goods from African creators
 - Microfinance integration for community economic development
 - Tourism partnerships connecting virtual exploration with real travel
 - Professional networking features for African entrepreneurs and creatives
 
-**Global Reach**
+### Global Reach
 
 - Multi-language support for major African languages
 - Diaspora community features connecting people to their ancestral homes
@@ -356,19 +356,19 @@ npm run dev
 
 SafariVerse is powered by smart contracts deployed on Hedera Testnet:
 
-### **SafariVerseNFT Contract**
+### SafariVerseNFT Contract
 
 - **Address**: `0x96d9646faEdcfbB6323f7cb4c2245a5F81b2710F`
 - **Purpose**: ERC-721 NFT contract for African cultural artifacts
 - **Explorer**: [View on Hashscan](https://hashscan.io/testnet/contract/0x96d9646faEdcfbB6323f7cb4c2245a5F81b2710F)
 
-### **SafariMart Contract**
+### SafariMart Contract
 
 - **Address**: `0xB4E8A4B4f2F9D74b1D9adFc4a71c2cb0DA67c349`
 - **Purpose**: Marketplace for trading 3D models and digital assets
 - **Explorer**: [View on Hashscan](https://hashscan.io/testnet/contract/0xB4E8A4B4f2F9D74b1D9adFc4a71c2cb0DA67c349)
 
-### **Environment Setup**
+### Environment Setup
 
 Add these to your `.env` file:
 
@@ -401,7 +401,7 @@ These 3D models represent authentic African cultural artifacts and can be used w
 
 ## 🛠️ Tech Stack Deep Dive
 
-**Frontend Excellence**
+### Frontend Excellence
 
 - Next.js 15, React 19, TypeScript for modern web development
 - Three.js, React Three Fiber, React Three Drei for 3D experiences
@@ -409,14 +409,14 @@ These 3D models represent authentic African cultural artifacts and can be used w
 - Framer Motion for smooth animations
 - Lucide React for consistent iconography
 
-**Blockchain Infrastructure**
+### Blockchain Infrastructure
 
 - Hedera Hashgraph for sustainable, fast transactions
 - Smart contracts for NFT authentication and community governance
 - Wallet integration supporting multiple providers
 - Real-time blockchain event processing
 
-**Community Features**
+### Community Features
 
 - Real-time messaging and presence systems
 - Content management with community moderation
