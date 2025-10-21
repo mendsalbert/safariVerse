@@ -156,6 +156,7 @@ export default function Home() {
               src="/Gemini_Generated_Image_l2zkqal2zkqal2zk Background Removed.png"
               alt="African Wildlife Globe"
               fill
+              sizes="(max-width: 640px) 144px, (max-width: 768px) 160px, 192px"
               className="object-contain drop-shadow-2xl hover:scale-105 transition-transform duration-500"
               priority
             />

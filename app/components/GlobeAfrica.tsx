@@ -8,7 +8,7 @@ import {
   PerspectiveCamera,
   Text,
 } from "@react-three/drei";
-import { Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import * as THREE from "three";
 import {
@@ -18,6 +18,7 @@ import {
   Map as MapIcon,
   Mouse,
   ZoomIn,
+  AlertTriangle,
 } from "lucide-react";
 
 type LatLng = { lat: number; lng: number };
@@ -245,7 +246,72 @@ function RotatingGlobe({ onReady }: { onReady?: () => void }) {
 
 export default function GlobeAfrica() {
   const [showInfo, setShowInfo] = useState(true);
+  const [webglSupported, setWebglSupported] = useState(true);
+  const [webglError, setWebglError] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    // Check WebGL support
+    try {
+      const canvas = document.createElement("canvas");
+      const gl =
+        canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+      if (!gl) {
+        setWebglSupported(false);
+        setWebglError("WebGL is not supported or disabled in your browser");
+      }
+    } catch (e) {
+      setWebglSupported(false);
+      setWebglError("Failed to initialize WebGL");
+    }
+  }, []);
+
+  // Fallback UI when WebGL is not available
+  if (!webglSupported) {
+    return (
+      <div className="w-full h-screen relative bg-gradient-to-b from-orange-900 via-red-800 to-amber-900 flex items-center justify-center">
+        <div className="max-w-2xl mx-auto px-6">
+          <div className="bg-gradient-to-br from-orange-800/90 via-red-800/90 to-amber-800/90 backdrop-blur-xl text-white p-8 rounded-3xl shadow-2xl border-2 border-orange-400/50">
+            <div className="flex items-center gap-4 mb-6">
+              <AlertTriangle className="w-12 h-12 text-yellow-300" />
+              <h1 className="font-display text-4xl bg-gradient-to-r from-orange-200 via-yellow-200 to-red-200 bg-clip-text text-transparent">
+                WebGL Not Available
+              </h1>
+            </div>
+            <p className="text-orange-100 text-lg mb-6">
+              {webglError ||
+                "Your browser does not support WebGL, which is required for the 3D globe visualization."}
+            </p>
+            <div className="space-y-3 text-orange-100 mb-6">
+              <p className="font-semibold text-yellow-200">To enable WebGL:</p>
+              <ul className="list-disc list-inside space-y-2 ml-4">
+                <li>Enable hardware acceleration in your browser settings</li>
+                <li>Update your graphics drivers</li>
+                <li>Try a different browser (Chrome, Firefox, Safari, Edge)</li>
+                <li>Check if WebGL is disabled in browser flags</li>
+              </ul>
+            </div>
+            <div className="flex gap-4 flex-wrap">
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-6 py-3 rounded-lg font-medium hover:from-green-600 hover:to-emerald-600 transition-colors shadow-lg"
+              >
+                Retry
+              </button>
+              <button
+                onClick={() => router.push("/game/nigeria")}
+                className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-6 py-3 rounded-lg font-medium hover:from-orange-600 hover:to-amber-600 transition-colors shadow-lg flex items-center gap-2"
+              >
+                <Compass className="w-5 h-5" />
+                Continue to Safari
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full h-screen relative bg-gradient-to-b from-orange-900 via-red-800 to-amber-900">
       {/* Modal on load */}
@@ -313,10 +379,15 @@ export default function GlobeAfrica() {
         shadows
         onPointerMissed={() => {}}
         style={{ touchAction: "none" }}
+        onCreated={({ gl }) => {
+          // Canvas created successfully
+          console.log("WebGL context created successfully");
+        }}
         gl={{
           antialias: true,
           alpha: true,
           powerPreference: "high-performance",
+          failIfMajorPerformanceCaveat: false,
         }}
       >
         <Suspense fallback={null}>
