@@ -28,6 +28,11 @@ export const metadata: Metadata = {
   title: "SafariVerse - African Cultural Metaverse",
   description:
     "Explore virtual environments inspired by African culture. Socialize, create, and trade tokenized assets in the SafariVerse metaverse.",
+  icons: {
+    icon: "/favicon.webp",
+    shortcut: "/favicon.webp",
+    apple: "/favicon.webp",
+  },
 };
 
 export default function RootLayout({
