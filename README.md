@@ -318,6 +318,11 @@ The journey of SafariVerse is just beginning, and our roadmap reflects our commi
 - International cultural exchange programs
 - Academic research partnerships studying digital cultural preservation
 
+## 🔗 External Resources
+
+- **Pitch Deck**: [View the SafariVerse Pitch Deck](https://docs.google.com/presentation/d/1sm7CiYv4JoSmuO3JOcSrWNmesZkBHscldFt-8zAH-ds/edit?slide=id.g2a5767c335a_0_0#slide=id.g2a5767c335a_0_0)
+- **Certificate**: [View Certificate](https://drive.google.com/file/d/1gS-Hr36LS5TSob9CX1sV7SJ9v2RstHEF/view?usp=sharing)
+
 ## 🚀 Getting Started
 
 Ready to explore Africa like never before?
